@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv generator-info-name="test-fixture">
+  <channel id="1tv.ru"><display-name>Первый канал</display-name></channel>
+  <channel id="matchtv.ru"><display-name>Матч ТВ</display-name></channel>
+  <channel id="russia1.ru"><display-name>Россия 1</display-name></channel>
+  <programme start="20260108120000 +0300" stop="20260108130000 +0300" channel="1tv.ru">
+    <title>Новости</title>
+    <desc>Информационный выпуск</desc>
+  </programme>
+  <programme start="20260108130000 +0300" channel="matchtv.ru">
+    <title>Футбол. Обзор</title>
+  </programme>
+  <programme start="not-a-time" channel="russia1.ru">
+    <title>Программа с битым временем</title>
+  </programme>
+</tv>

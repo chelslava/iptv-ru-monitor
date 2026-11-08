@@ -1,0 +1,53 @@
+name: Check global
+
+# Базовая проверка доступности с GitHub-hosted runner.
+# Результаты маркируются probe_location=github-runner и НЕ считаются
+# российской точкой проверки.
+
+on:
+  workflow_dispatch:
+    inputs:
+      levels:
+        description: "Уровни проверки"
+        default: "http,hls"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 */6 * * *" # каждые 6 часов (время не гарантировано)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-global
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: HTTP/HLS check from GitHub runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Refresh catalog
+        run: uv run iptv-monitor discover --probe-location github-runner
+
+      - name: Check streams
+        run: uv run iptv-monitor check --levels ${{ inputs.levels || 'http,hls' }} --probe-location github-runner
+        env:
+          IPTV_JSONL_PATH: data/state/checks-global.jsonl
+
+      - name: Upload check results
+        uses: actions/upload-artifact@v4
+        with:
+          name: checks-global
+          path: data/state/checks-global.jsonl
+          retention-days: 30
+          if-no-files-found: error

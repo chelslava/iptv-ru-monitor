@@ -1,0 +1,39 @@
+# Веса компонентов рейтинга (сумма = 1.0).
+# Это стартовая гипотеза из архитектуры — калибровать по реальным результатам
+# (см. docs/QUALITY_SCORING.md).
+
+weights:
+  availability: 0.35
+  stability: 0.30
+  startup: 0.15
+  media: 0.15
+  hls: 0.05
+
+# Границы уровней (баллы). Ниже unstable — Failed.
+# При недостатке истории присваивается insufficient_data.
+levels:
+  excellent: 90
+  good: 75
+  unstable: 50
+
+# Профили отбора для публикации.
+profiles:
+  ru_default:
+    country: RU
+    min_score: 50
+    min_checks: 5
+  ru_hd:
+    country: RU
+    min_score: 75
+    min_checks: 8
+    min_height: 720 # в последних успешных проверках
+  ru_kids:
+    country: RU
+    min_score: 75
+    min_checks: 8
+    categories: [kids]
+  ru_sport:
+    country: RU
+    min_score: 75
+    min_checks: 8
+    categories: [sports]

@@ -1,0 +1,36 @@
+# Профиль страны RU. Логика стран не зашита в код: добавление второго файла
+# в config/countries/ расширяет систему на новую страну.
+
+country: RU
+name: Россия
+languages: [ru]
+
+# Плейлисты, генерируемые для страны (профили — config/quality_profiles.yaml).
+playlists:
+  - profile: ru_default
+    filename: russia.m3u
+    title: "Россия — основной плейлист"
+  - profile: ru_hd
+    filename: russia-hd.m3u
+    title: "Россия — HD"
+  - profile: ru_kids
+    filename: russia-kids.m3u
+    title: "Россия — детские"
+  - profile: ru_sport
+    filename: russia-sport.m3u
+    title: "Россия — спорт"
+
+epg_filename: russia.xml
+
+# Ручные алиасы EPG: каноническое название -> tvg_id источника XMLTV.
+# Ручное сопоставление не перезаписывается нечётким совпадением.
+aliases:
+  - name: "Первый канал"
+    tvg_id: "1tv.ru"
+    manual: true
+  - name: "Россия 1"
+    tvg_id: "russia1.ru"
+    manual: true
+  - name: "Матч ТВ"
+    tvg_id: "matchtv.ru"
+    manual: true

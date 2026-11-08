@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "iptv-ru-monitor/schemas/check_result.schema.json",
+  "title": "CheckResult",
+  "description": "Одна проверка одного потока из одной точки наблюдения.",
+  "type": "object",
+  "required": ["stream_id", "checked_at", "probe_location", "check_version"],
+  "properties": {
+    "stream_id": {"type": "string"},
+    "checked_at": {"type": "string", "format": "date-time"},
+    "probe_location": {"type": "string", "description": "github-runner | ru-vds | local | ..."},
+    "country_code": {"type": ["string", "null"], "pattern": "^[A-Z]{2}$"},
+    "http_status": {"type": ["integer", "null"]},
+    "dns_ok": {"type": ["boolean", "null"]},
+    "tls_ok": {"type": ["boolean", "null"]},
+    "playlist_ok": {"type": ["boolean", "null"]},
+    "first_segment_ok": {"type": ["boolean", "null"]},
+    "startup_time_ms": {"type": ["integer", "null"]},
+    "video_codec": {"type": ["string", "null"]},
+    "audio_codec": {"type": ["string", "null"]},
+    "width": {"type": ["integer", "null"]},
+    "height": {"type": ["integer", "null"]},
+    "fps": {"type": ["number", "null"]},
+    "bitrate_bps": {"type": ["integer", "null"]},
+    "duration_checked_seconds": {"type": ["number", "null"]},
+    "error_code": {
+      "type": ["string", "null"],
+      "enum": [
+        "ssrf_blocked", "unsupported_scheme", "redirect_limit", "dns_error",
+        "tls_error", "http_4xx", "http_5xx", "transport_error", "timeout",
+        "invalid_content", "hls_invalid", "hls_variant_unavailable",
+        "segment_error", "ffprobe_unavailable", "ffprobe_timeout",
+        "ffprobe_error", "playback_error", "unknown"
+      ]
+    },
+    "error_message": {"type": ["string", "null"], "description": "Секреты отредактированы"},
+    "check_version": {"type": "string"}
+  }
+}

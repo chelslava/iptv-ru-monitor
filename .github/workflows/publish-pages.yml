@@ -1,0 +1,59 @@
+name: Publish Pages
+
+# Публикация собранных артефактов (dist) на GitHub Pages.
+# Требование: Settings → Pages → Source → GitHub Actions.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * *" # ежедневно после сборки (время не гарантировано)
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish dist to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Find latest build run
+        id: runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow build-playlists.yml \
+            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
+          if [[ -z "$build_id" ]]; then
+            echo "Успешных сборок не найдено — сначала запустите build-playlists." >&2
+            exit 1
+          fi
+          echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+          run-id: ${{ steps.runs.outputs.build_id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

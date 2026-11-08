@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+
+# Generated artifacts
+dist/
+
+# Runtime data (keep directory placeholders)
+data/cache/*
+!data/cache/.gitkeep
+data/state/*
+!data/state/.gitkeep
+
+# VDS check results (local emulation and real runs)
+deploy/vds/data/
+
+# OS
+.DS_Store
+Thumbs.db

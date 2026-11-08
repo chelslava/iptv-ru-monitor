@@ -1,0 +1,25 @@
+# Сопоставление group-title / названий каналов с внутренними категориями.
+# Паттерны — регистронезависимые подстроки (применяется к нижнему регистру).
+# Первый подходящий паттерн выигрывает; порядок важен.
+
+categories:
+  - category: news
+    patterns: ["новост", "news", "информацион", "вечерн"]
+  - category: kids
+    patterns: ["детск", "kids", "мульт", "cartoon", "аниме", "anime", "типи", "gulli", "мама"]
+  - category: sports
+    patterns: ["спорт", "sport", "футбол", "football", "хоккей", "hockey", "матч", "кхл", "eurosport"]
+  - category: movies
+    patterns: ["кино", "фильм", "movie", "cinema", "мечта", "ностальг"]
+  - category: music
+    patterns: ["музык", "music", "мтв", "mtv", "bridge", "хит", "шансон", "лайф"]
+  - category: education
+    patterns: ["наук", "образован", "познават", "discover", "истор", "history", "документ", "24dok", "наука"]
+  - category: religious
+    patterns: ["спас", "церк", "православ", "благовест", "союз", "religio"]
+  - category: entertainment
+    patterns: ["развлек", "юмор", "comedy", "сериал", "entertain", "тнт", "пятниц", "стс", "рен"]
+  - category: weather
+    patterns: ["погод", "метео", "weather"]
+
+default_category: general

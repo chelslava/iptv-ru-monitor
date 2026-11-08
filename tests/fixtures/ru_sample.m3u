@@ -1,0 +1,16 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="1tv.ru" tvg-name="Первый канал" tvg-logo="https://example.org/logo/1tv.png" group-title="Общие",Первый канал
+https://stream.example.org/1tv/index.m3u8
+#EXTINF:-1 tvg-id="russia1.ru" tvg-name="Россия 1" tvg-logo="https://example.org/logo/russia1.png" group-title="Общие",Россия 1 HD
+https://stream.example.org/russia1/720/index.m3u8
+#EXTINF:-1 tvg-id="matchtv.ru" tvg-name="Матч ТВ" group-title="Спорт",Матч ТВ
+https://stream.example.org/match/index.m3u8
+#EXTINF:-1 tvg-name="Карусель" group-title="Детские",Карусель (детский)
+https://stream.example.org/karusel/index.m3u8
+#EXTINF:-1 tvg-id="1tv.ru" tvg-name="Первый канал" group-title="Общие",Первый канал
+https://mirror.example.org/1tv/index.m3u8
+#EXTINF:-1 tvg-id="secret.tv" group-title="Разное",Секретный поток
+https://stream.example.org/secret/index.m3u8?token=abc123def456ghi789jkl012
+#EXTVLCOPT:http-user-agent=VLC
+#EXTINF:-1 tvg-id="news24.ru" group-title="Новости",Новости 24
+https://stream.example.org/news24/live.ts

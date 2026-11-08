@@ -1,0 +1,14 @@
+services:
+  monitor:
+    build: .
+    image: iptv-ru-monitor:local
+    # Полный локальный прогон; переопределите команду для отдельных этапов,
+    # например: docker compose run --rm monitor check --levels http,hls
+    command: pipeline
+    environment:
+      IPTV_PROBE_LOCATION: local
+      IPTV_LOG_LEVEL: INFO
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./dist:/app/dist

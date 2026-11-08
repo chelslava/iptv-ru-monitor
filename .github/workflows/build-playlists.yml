@@ -1,0 +1,89 @@
+name: Build playlists
+
+# Объединение результатов проверок (GitHub runner + RU VDS),
+# скоринг и генерация плейлистов/отчётов.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *" # ежедневно после проверок (время не гарантировано)
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: build-playlists
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Merge results and build dist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Find latest check runs
+        id: runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          global_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
+            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
+          ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \
+            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
+          echo "global_id=${global_id}" >> "$GITHUB_OUTPUT"
+          echo "ru_id=${ru_id}" >> "$GITHUB_OUTPUT"
+          echo "global=${global_id} ru=${ru_id}"
+
+      - name: Download global check results
+        if: steps.runs.outputs.global_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: checks-global
+          path: artifacts/global
+          run-id: ${{ steps.runs.outputs.global_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download RU check results
+        if: steps.runs.outputs.ru_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: checks-ru
+          path: artifacts/ru
+          run-id: ${{ steps.runs.outputs.ru_id }}
+          github-token: ${{ github.token }}
+
+      - name: Merge check history
+        run: |
+          mkdir -p data/state
+          : > data/state/checks.jsonl
+          if compgen -G 'artifacts/*/*.jsonl' > /dev/null; then
+            cat artifacts/*/*.jsonl >> data/state/checks.jsonl
+          fi
+          echo "merged records: $(wc -l < data/state/checks.jsonl)"
+
+      - name: Refresh catalog and enrich
+        run: |
+          uv run iptv-monitor discover --probe-location github-runner
+          uv run iptv-monitor enrich
+
+      - name: Score and build
+        run: |
+          uv run iptv-monitor score
+          uv run iptv-monitor build --country RU
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error

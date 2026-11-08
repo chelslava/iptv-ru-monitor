@@ -1,0 +1,31 @@
+# Docker-окружение проверок на российском VDS.
+#
+# Ограничения ресурсов обязательны: сторонние URL — недоверенный ввод,
+# и перегрузка VDS не должна влиять на хост (см. docs/ARCHITECTURE.md, раздел 8).
+
+services:
+  checker:
+    build: ../../
+    image: iptv-ru-monitor:vds
+    # Свежий файл результатов на каждый запуск — скрипт run_vds_check.sh
+    # передаёт его в CI как артефакт.
+    command: check --levels http,hls --probe-location ru-vds --country RU
+    environment:
+      IPTV_PROBE_LOCATION: ru-vds
+      IPTV_STORAGE: jsonl
+      IPTV_JSONL_PATH: /app/data/state/checks-ru.jsonl
+      IPTV_LOG_LEVEL: INFO
+    volumes:
+      - ./data:/app/data
+      - ../../config:/app/config:ro
+    # Безопасность: без дополнительных привилегий, файловая система только
+    # для чтения (запись — в смонтированный том данных и /tmp).
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:size=64m,mode=1777

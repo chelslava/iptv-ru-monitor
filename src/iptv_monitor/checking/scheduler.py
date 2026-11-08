@@ -1,0 +1,181 @@
+"""Оркестрация проверок потоков по уровням.
+
+Проверки выполняются по уровням, чтобы не расходовать ресурсы на тяжёлую
+диагностику заведомо неработающих URL: HTTP → HLS → FFprobe → воспроизведение.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+from collections.abc import Callable, Sequence
+
+import httpx
+
+from ..domain.check_result import CheckResult
+from ..domain.enums import StreamProtocol
+from ..domain.stream import Stream
+from ..infrastructure.http_client import fetch
+from ..infrastructure.logging import redact_text
+from ..settings import AppSettings
+from .ffprobe import probe_media
+from .geo import resolve_probe_location
+from .hls import check_hls
+from .http import classify_http
+from .playback import check_playback
+
+logger = logging.getLogger(__name__)
+
+LEVELS = ("http", "hls", "ffprobe", "playback")
+DEFAULT_LEVELS: tuple[str, ...] = ("http", "hls")
+
+
+def parse_levels(spec: str) -> tuple[str, ...]:
+    """Разобрать спецификацию уровней 'http,hls' с проверкой имён."""
+    requested = tuple(part.strip() for part in spec.split(",") if part.strip())
+    unknown = [level for level in requested if level not in LEVELS]
+    if unknown:
+        raise ValueError(f"unknown check levels: {unknown}; available: {LEVELS}")
+    if not requested:
+        raise ValueError("at least one check level is required")
+    return requested
+
+
+def _hls_expected(stream: Stream, content_type: str) -> bool:
+    if stream.protocol == StreamProtocol.HLS:
+        return True
+    if "mpegurl" in content_type.lower():
+        return True
+    return stream.url.lower().split("?")[0].endswith((".m3u8", ".m3u"))
+
+
+async def check_stream(
+    stream: Stream,
+    client: httpx.AsyncClient,
+    settings: AppSettings,
+    *,
+    levels: Sequence[str] = DEFAULT_LEVELS,
+    probe_location: str | None = None,
+    country_code: str | None = None,
+    ffprobe_bin: str | None = None,
+    ffmpeg_bin: str | None = None,
+) -> CheckResult:
+    """Выполнить уровни проверки одного потока и собрать CheckResult."""
+    result = CheckResult(
+        stream_id=stream.stream_id,
+        probe_location=resolve_probe_location(probe_location, settings),
+        country_code=country_code,
+    )
+    level_set = set(levels)
+
+    # Уровень 1 — быстрая HTTP-проверка.
+    http_result = await fetch(
+        client,
+        stream.url,
+        max_bytes=settings.check.head_bytes,
+        max_redirects=settings.check.max_redirects,
+    )
+    result.http_status = http_result.status or None
+    result.dns_ok = http_result.dns_ok
+    result.tls_ok = http_result.tls_ok
+    result.startup_time_ms = http_result.elapsed_ms or None
+
+    code, message = classify_http(http_result)
+    if code is not None:
+        result.error_code = code
+        result.error_message = redact_text(message or "")
+        return result
+
+    # Уровень 2 — HLS.
+    if "hls" in level_set and _hls_expected(stream, http_result.headers.get("content-type", "")):
+        hls = await check_hls(
+            stream.url,
+            client,
+            max_bytes=max(settings.check.head_bytes * 4, 262144),
+            segment_max_bytes=settings.check.head_bytes,
+            max_redirects=settings.check.max_redirects,
+        )
+        result.playlist_ok = hls.playlist_ok
+        result.first_segment_ok = hls.first_segment_ok
+        if hls.error_code is not None:
+            result.error_code = hls.error_code
+            result.error_message = redact_text(hls.error_message or "")
+            return result
+
+    # Уровень 3 — медиапараметры.
+    if "ffprobe" in level_set:
+        media = await probe_media(
+            stream.url,
+            ffprobe_bin=ffprobe_bin or os.environ.get("IPTV_FFPROBE_BIN", "ffprobe"),
+            timeout_seconds=settings.check.ffprobe_timeout_seconds,
+        )
+        result.video_codec = media.video_codec
+        result.audio_codec = media.audio_codec
+        result.width = media.width
+        result.height = media.height
+        result.fps = media.fps
+        result.bitrate_bps = media.bitrate_bps
+        if media.error_code is not None:
+            result.error_code = media.error_code
+            result.error_message = redact_text(media.error_message or "")
+            return result
+
+    # Уровень 4 — ограниченное декодирование (используется выборочно).
+    if "playback" in level_set:
+        playback = await check_playback(
+            stream.url,
+            ffmpeg_bin=ffmpeg_bin or os.environ.get("IPTV_FFMPEG_BIN", "ffmpeg"),
+            duration_seconds=settings.check.playback_duration_seconds,
+        )
+        result.duration_checked_seconds = playback.decoded_seconds
+        if playback.error_code is not None:
+            result.error_code = playback.error_code
+            result.error_message = redact_text(playback.error_message or "")
+            return result
+
+    return result
+
+
+async def run_checks(
+    streams: Sequence[Stream],
+    client: httpx.AsyncClient,
+    settings: AppSettings,
+    *,
+    levels: Sequence[str] = DEFAULT_LEVELS,
+    concurrency: int | None = None,
+    probe_location: str | None = None,
+    country_code: str | None = None,
+    ffprobe_bin: str | None = None,
+    ffmpeg_bin: str | None = None,
+    progress: Callable[[int, CheckResult], None] | None = None,
+) -> list[CheckResult]:
+    """Проверить потоки с ограничением параллелизма.
+
+    Результаты возвращаются в порядке входного списка; прогресс-колбэк
+    вызывается по завершении каждого потока.
+    """
+    semaphore = asyncio.Semaphore(concurrency or settings.check.concurrency)
+    completed = 0
+    lock = asyncio.Lock()
+
+    async def _one(stream: Stream) -> CheckResult:
+        nonlocal completed
+        async with semaphore:
+            result = await check_stream(
+                stream,
+                client,
+                settings,
+                levels=levels,
+                probe_location=probe_location,
+                country_code=country_code,
+                ffprobe_bin=ffprobe_bin,
+                ffmpeg_bin=ffmpeg_bin,
+            )
+        async with lock:
+            completed += 1
+            if progress:
+                progress(completed, result)
+        return result
+
+    return list(await asyncio.gather(*(_one(stream) for stream in streams)))

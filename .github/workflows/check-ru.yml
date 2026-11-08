@@ -1,0 +1,58 @@
+name: Check RU (VDS)
+
+# Проверка доступности из российского сегмента сети.
+# Запуск на VDS по SSH; без настроенных секретов (VDS_HOST и т.д.)
+# workflow завершается успешно с пометкой о пропуске.
+
+on:
+  workflow_dispatch:
+    inputs:
+      levels:
+        description: "Уровни проверки"
+        default: "http,hls"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 6 * * *" # ежедневно, ~06:00 UTC (время не гарантировано)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-ru
+  cancel-in-progress: false
+
+jobs:
+  vds-check:
+    name: Check from RU VDS over SSH
+    runs-on: ubuntu-latest
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_USER: ${{ secrets.VDS_USER }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+    steps:
+      - name: Skip if VDS is not configured
+        if: env.VDS_HOST == ''
+        run: echo "VDS_HOST не задан — проверка из РФ пропущена. См. deploy/vds/README.md."
+
+      - name: Run check on VDS
+        if: env.VDS_HOST != ''
+        run: |
+          install -m 600 /dev/null vds_ci_key
+          echo "$VDS_SSH_KEY" > vds_ci_key
+          ssh -o StrictHostKeyChecking=accept-new -i vds_ci_key \
+            "$VDS_USER@$VDS_HOST" \
+            "IPTV_LEVELS='${{ inputs.levels || 'http,hls' }}' bash /opt/iptv-ru-monitor/scripts/run_vds_check.sh"
+          scp -i vds_ci_key \
+            "$VDS_USER@$VDS_HOST:/opt/iptv-ru-monitor/deploy/vds/data/state/checks-ru.jsonl" \
+            checks-ru.jsonl
+          rm -f vds_ci_key
+
+      - name: Upload check results
+        if: env.VDS_HOST != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: checks-ru
+          path: checks-ru.jsonl
+          retention-days: 30
+          if-no-files-found: error

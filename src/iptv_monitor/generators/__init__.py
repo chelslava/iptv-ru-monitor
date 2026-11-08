@@ -1,0 +1,18 @@
+"""Генераторы публичных артефактов: M3U, XMLTV, JSON, отчёты."""
+
+from .json_catalog import channels_catalog, streams_catalog, write_json
+from .m3u import M3UEntry, entry_for, render_m3u
+from .report import build_report, render_index_html
+from .xmltv import render_xmltv
+
+__all__ = [
+    "M3UEntry",
+    "build_report",
+    "channels_catalog",
+    "entry_for",
+    "render_index_html",
+    "render_m3u",
+    "render_xmltv",
+    "streams_catalog",
+    "write_json",
+]

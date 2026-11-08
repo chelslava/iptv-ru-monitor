@@ -1,0 +1,62 @@
+[project]
+name = "iptv-ru-monitor"
+version = "0.1.0"
+description = "Monitoring of publicly available IPTV streams and channel catalog building (Russia first)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "iptv-ru-monitor contributors" }]
+requires-python = ">=3.12"
+keywords = ["iptv", "m3u", "xmltv", "epg", "monitoring", "hls"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Video",
+  "Topic :: System :: Monitoring",
+]
+dependencies = [
+  "click>=8.1,<9",
+  "httpx>=0.27,<1",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2,<9",
+  "pytest-asyncio>=0.23,<2",
+  "ruff>=0.5,<1",
+  "mypy>=1.10,<2",
+  "types-PyYAML>=6.0,<7",
+]
+
+[project.scripts]
+iptv-monitor = "iptv_monitor.cli:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/iptv_monitor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = false

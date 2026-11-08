@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "iptv-ru-monitor/schemas/stream.schema.json",
+  "title": "Stream",
+  "description": "Поток канала. Секретные URL не публикуются (см. docs/DATA_MODEL.md).",
+  "type": "object",
+  "required": ["stream_id", "channel_id", "url", "protocol", "source_id"],
+  "properties": {
+    "stream_id": {"type": "string", "description": "16 hex sha256(URL)"},
+    "channel_id": {"type": "string"},
+    "url": {"type": "string", "format": "uri", "pattern": "^https?://"},
+    "protocol": {"type": "string", "enum": ["hls", "http", "dash", "unknown"]},
+    "source_id": {"type": "string", "description": "Источник происхождения URL"},
+    "declared_quality": {"type": ["string", "null"]},
+    "enabled": {"type": "boolean"},
+    "publication_status": {"type": "string", "enum": ["pending", "allowed", "rejected"]}
+  }
+}

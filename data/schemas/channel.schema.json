@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "iptv-ru-monitor/schemas/channel.schema.json",
+  "title": "Channel",
+  "description": "Нормализованный телеканал (см. docs/DATA_MODEL.md).",
+  "type": "object",
+  "required": ["channel_id", "name", "country"],
+  "properties": {
+    "channel_id": {"type": "string", "description": "Внутренний стабильный ID"},
+    "name": {"type": "string", "description": "Каноническое название"},
+    "alt_names": {"type": "array", "items": {"type": "string"}},
+    "country": {"type": "string", "pattern": "^[A-Z]{2}$", "description": "ISO 3166-1 alpha-2"},
+    "languages": {"type": "array", "items": {"type": "string"}},
+    "category": {
+      "type": "string",
+      "enum": [
+        "general", "news", "kids", "sports", "movies",
+        "music", "education", "entertainment", "religious", "weather"
+      ]
+    },
+    "tvg_id": {"type": ["string", "null"], "description": "Идентификатор EPG/XMLTV"},
+    "logo_url": {"type": ["string", "null"]},
+    "is_public": {"type": "boolean", "description": "Допуск к публичной сборке"},
+    "metadata_source": {"type": ["string", "null"], "description": "Источник метаданных"}
+  }
+}

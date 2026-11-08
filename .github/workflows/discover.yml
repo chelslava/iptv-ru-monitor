@@ -1,0 +1,38 @@
+name: Discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *" # ежедневно, ~03:30 UTC (время не гарантировано)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discover
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: Update channel catalog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Discover sources
+        run: uv run iptv-monitor discover --probe-location github-runner
+
+      - name: Upload catalog
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog
+          path: data/state/
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,42 @@
+# Источники IPTV-потоков.
+#
+# Поля:
+#   id            — уникальный идентификатор источника
+#   adapter       — адаптер discovery: iptv_org | free_tv | custom_m3u
+#   enabled       — участвует ли источник в сборе
+#   country       — ISO 3166-1 alpha-2 (фильтр/метка)
+#   public_policy — политика публикации потоков источника:
+#                     allow  — потоки могут попадать в публичные сборки
+#                     review — публикация только после подтверждения
+#                              (data/state/approved_streams.yaml)
+#                     deny   — никогда не публиковать
+#   url / path    — адрес (M3U) или локальный файл
+#   refresh_hours — желаемый период обновления
+#
+# URL, лицензию и условия использования каждого источника проверять перед
+# включением (см. docs/SOURCE_POLICY.md).
+
+sources:
+  - id: iptv-org-ru
+    adapter: iptv_org
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://iptv-org.github.io/iptv/countries/ru.m3u"
+
+  - id: free-tv
+    adapter: free_tv
+    enabled: false # включить после проверки лицензии и актуального URL
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_russia.m3u8"
+
+  - id: custom-local
+    adapter: custom_m3u
+    enabled: true
+    country: RU
+    public_policy: deny # собственные списки по умолчанию не публикуются
+    path: "data/input/custom.m3u"
+    refresh_hours: 0

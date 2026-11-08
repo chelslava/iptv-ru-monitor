@@ -1,0 +1,43 @@
+# Основные настройки приложения.
+# Значения из этого файла переопределяются переменными окружения IPTV_* (см. .env.example).
+
+app:
+  name: iptv-ru-monitor
+  log_level: INFO
+
+paths:
+  data_dir: data
+  dist_dir: dist
+
+# Точка наблюдения по умолчанию: local | github-runner | ru-vds.
+probe_location: local
+
+check:
+  concurrency: 8
+  max_redirects: 5
+  http_timeout_seconds: 10.0
+  hls_timeout_seconds: 15.0
+  segment_timeout_seconds: 10.0
+  # Сколько байт читать на уровне HTTP — защита от «бесконечных» MPEG-TS ответов.
+  head_bytes: 65536
+  ffprobe_timeout_seconds: 30.0
+  playback_duration_seconds: 10.0
+  user_agent: "iptv-ru-monitor/0.1"
+
+storage:
+  # jsonl | sqlite
+  backend: jsonl
+  jsonl_path: data/state/checks.jsonl
+  sqlite_path: data/state/history.sqlite
+
+retention:
+  history_days: 90
+  max_results_per_stream: 200
+
+scoring:
+  # Минимальное число проверок для рейтинга; иначе — статус Insufficient data.
+  min_checks: 5
+
+geo:
+  # Необязательный сервис определения страны точки наблюдения.
+  ip_info_url: "https://ipinfo.io/json"

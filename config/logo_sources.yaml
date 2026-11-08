@@ -1,0 +1,19 @@
+# Источники логотипов.
+# Приоритет — доверенным каталогам. Логотипы не копируются в публичный каталог
+# при неясных правах: хранится URL и происхождение изображения.
+
+logo_sources:
+  - id: iptv-org-logos
+    enabled: false # включить после проверки условий
+    type: url_pattern
+    # Кандидат логотипа строится из tvg_id канала.
+    url_template: "https://raw.githubusercontent.com/iptv-org/logo/main/{tvg_id}.png"
+    trust_level: 0.8
+    max_bytes: 2097152
+    allowed_mime: [image/png, image/jpeg, image/webp, image/svg+xml]
+    license_note: "Репозиторий iptv-org/logo; проверить условия перед включением"
+
+# Локальные переопределения (URL логотипов, добавляемых вручную).
+overrides: []
+#  - name: "Первый канал"
+#    logo_url: "https://example.org/logos/1tv.png"
