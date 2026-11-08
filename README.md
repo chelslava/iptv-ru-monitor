@@ -4,14 +4,14 @@
 
 **Автоматизированный мониторинг публичных IPTV-потоков и каталог каналов для Android TV / TiviMate**
 
-🇷🇺 Первая страна — Россия · Архитектура расширяема на другие страны конфигурацией
+🇷🇺 Первая страна — Россия · Другие страны добавляются конфигурацией, без правки кода
 
 [![CI](https://github.com/chelslava/iptv-ru-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/chelslava/iptv-ru-monitor/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)
 ![mypy](https://img.shields.io/badge/mypy-checked-2a6db2.svg)
-![pytest](https://img.shields.io/badge/pytest-97%20tests-0a9edc.svg)
+![pytest](https://img.shields.io/badge/pytest-passing-0a9edc.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)
 
 </div>
@@ -33,13 +33,13 @@
 
 | | |
 |---|---|
-| 🔎 **Discovery** | Сбор каналов из открытых источников: IPTV-org, Free-TV/IPTV, собственные M3U-списки |
-| 🧹 **Normalization** | Канонические названия, страны, категории; канал отделён от потока (зеркала и варианты качества) |
+| 🔎 **Discovery** | Сбор каналов из открытых источников: IPTV-org, Free-TV/IPTV, ngrch, IPTVMIR и любые M3U-списки (адаптер `remote_m3u`) |
+| 🧹 **Normalization** | Канонические названия, категории; страна определяется по `tvg-id` и названию, а не наследуется от источника; канал отделён от потока |
 | 🔬 **Многоуровневые проверки** | HTTP/DNS/TLS → HLS (playlist + первый сегмент) → FFprobe (кодеки, разрешение, битрейт) → ограниченное декодирование |
-| 🌍 **Географический контекст** | Результаты маркируются точкой наблюдения: `github-runner`, `ru-vds`, … — доступность из РФ не смешивается с зарубежной |
+| 🌍 **Географический контекст** | Результаты маркируются точкой наблюдения: `github-runner`, `ru-vds`, `home-ru` — доступность из РФ не смешивается с зарубежной |
 | 📈 **Скоринг по истории** | Рейтинг строится по повторным проверкам; новым потокам присваивается `insufficient_data`, а не завышенный балл |
 | 📺 **EPG и логотипы** | Сопоставление XMLTV по `tvg-id`, ручным алиасам и нормализованным названиям; ручные совпадения не перезаписываются |
-| 🛡 **Безопасная публикация** | Секретные URL и токены не попадают в артефакты и логи; SSRF-защита проверок |
+| 🛡 **Безопасная публикация** | Секретные URL и токены не попадают в артефакты и логи; SSRF-защита при проверках сторонних URL; публикация — через подтверждение (PR с кандидатами) |
 | 📦 **Артефакты** | M3U для TiviMate, XMLTV, JSON-каталоги, отчёт с причинами включения/исключения |
 
 ## 🚀 Быстрый старт
@@ -72,28 +72,35 @@ docker compose run --rm monitor check    # отдельный этап
 </details>
 
 <details>
-<summary>🖥 Локальная эмуляция российского VDS</summary>
+<summary>🖥 Российская точка наблюдения с домашнего ПК (без VDS)</summary>
 
-Проверить сценарий VDS (метка `ru-vds`, отдельный файл результатов) без сервера:
+Разовый прогон сценария VDS (метка `ru-vds`, отдельный файл результатов):
 
 ```bash
-bash scripts/run_vds_check_local.sh     # проверка с ПК, уровни http,hls, 5 потоков
+bash scripts/run_vds_check_local.sh     # уровни http,hls, 5 потоков
 IPTV_LIMIT=20 IPTV_LEVELS=http,hls,ffprobe bash scripts/run_vds_check_local.sh
 ```
 
-Результат: `deploy/vds/data/state/checks-ru.jsonl` — подключается к сборке
-точно так же, как артефакт реального VDS. Подробнее:
-[deploy/vds/README.md](deploy/vds/README.md).
+Постоянная RU-точка — ночной прогон с резидентного IP (метка `home-ru`,
+300 потоков, публикация результатов в ветку `probe/ru`):
+
+```bash
+bash scripts/ru_probe_push.sh           # вручную; либо по расписанию
+IPTV_LIMIT=500 bash scripts/ru_probe_push.sh
+```
+
+Результаты подключаются к сборке так же, как артефакт реального VDS.
+Подробнее: [deploy/vds/README.md](deploy/vds/README.md).
 </details>
 
 ## 📊 Как это работает
 
 ```mermaid
 flowchart TD
-    SRC["🔎 Источники IPTV<br/>iptv-org · Free-TV · custom M3U"] --> DISC["Discovery<br/>разбор M3U"]
-    DISC --> NORM["🧹 Normalization<br/>каналы · потоки · категории · дедупликация"]
+    SRC["🔎 Источники IPTV<br/>iptv-org · Free-TV · ngrch · IPTVMIR · custom"] --> DISC["Discovery<br/>разбор M3U"]
+    DISC --> NORM["🧹 Normalization<br/>каналы · потоки · страны · категории · дедупликация"]
     NORM --> GH["🐙 GitHub Actions<br/>probe: github-runner"]
-    NORM --> VDS["🇷🇺 Российский VDS<br/>probe: ru-vds"]
+    NORM --> VDS["🇷🇺 Российская точка<br/>VDS или домашний ПК: ru-vds / home-ru"]
     GH --> RES["🔬 Check Results<br/>HTTP · HLS · FFprobe · история"]
     VDS --> RES
     RES --> ENR["📺 Enrichment<br/>EPG · логотипы · алиасы"]
@@ -168,15 +175,17 @@ dist/
 1. Дождитесь публикации артефактов (workflow `publish-pages.yml`).
 2. TiviMate → *Настройки → Плейлисты → Добавить плейлист → URL*:
    `https://<аккаунт>.github.io/iptv-ru-monitor/ru/russia.m3u`
-3. Там же укажите источник EPG: `.../ru/russia.xml`.
+3. Источник EPG: `.../ru/russia.xml` (появится после включения EPG-источников
+   в `config/epg_sources.yaml`).
 4. Тематические подборки: `russia-hd.m3u`, `russia-kids.m3u`, `russia-sport.m3u`.
 
-Локально: `uv run iptv-monitor build` и укажите TiviMate файл `dist/ru/russia.m3u`.
+Локально: соберите плейлист командой `uv run iptv-monitor build` и укажите
+в TiviMate файл `dist/ru/russia.m3u`.
 
 ## 🧪 Тестирование и качество
 
 ```bash
-uv run pytest            # 97 тестов (unit + integration, без сети)
+uv run pytest            # unit + integration, без обращения к сети
 uv run ruff check .      # линтер
 uv run mypy              # типизация
 ```
@@ -191,8 +200,8 @@ uv run mypy              # типизация
 - [x] **Этап 2** — проверки потоков: HTTP/HLS/FFprobe, классификация ошибок
 - [x] **Этап 3** — инфраструктура РФ-точки: Docker-окружение VDS, скрипты, слияние результатов *(полная проверка — на реальном VDS)*
 - [x] **Этап 4** — EPG и логотипы: XMLTV, tvg-id, алиасы, отчёт о покрытии *(источники включаются после проверки лицензий)*
-- [x] **Этап 5** — рейтинг и плейлисты: профили качества, M3U/XMLTV
-- [ ] **Этап 6** — публикация GitHub Pages и вторая страна
+- [x] **Этап 5** — рейтинг и плейлисты: профили качества, M3U/XMLTV, автоподготовка кандидатов на публикацию (PR от `approve-candidates`)
+- [ ] **Этап 6** — вторая страна (профиль `config/countries/<код>.yaml`); GitHub Pages уже опубликован
 
 ## 📚 Документация
 
@@ -222,5 +231,5 @@ uv run mypy              # типизация
 ---
 
 <div align="center">
-<sub>Сделано для сообщества · Мониторинг вместо обещаний: каждый поток в плейлисте проверяем</sub>
+<sub>Сделано для сообщества · Мониторинг вместо обещаний: каждый поток в плейлисте проверен</sub>
 </div>
