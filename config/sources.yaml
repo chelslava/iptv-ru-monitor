@@ -2,19 +2,24 @@
 #
 # Поля:
 #   id            — уникальный идентификатор источника
-#   adapter       — адаптер discovery: iptv_org | free_tv | custom_m3u
+#   adapter       — адаптер discovery: iptv_org | free_tv | custom_m3u | remote_m3u
 #   enabled       — участвует ли источник в сборе
 #   country       — ISO 3166-1 alpha-2 (фильтр/метка)
 #   public_policy — политика публикации потоков источника:
-#                     allow  — потоки могут попадать в публичные сборки
+#                     allow  — потоки могут попадать в публичные сборки (лицензия явно
+#                              разрешает переиспользование)
 #                     review — публикация только после подтверждения
-#                              (data/state/approved_streams.yaml)
+#                              (data/state/approved_streams.yaml; PR от workflow
+#                              approve-candidates)
 #                     deny   — никогда не публиковать
 #   url / path    — адрес (M3U) или локальный файл
 #   refresh_hours — желаемый период обновления
 #
+# Порядок важен: домашняя RU-точка проверяет первые N потоков каталога,
+# поэтому проверенные временем источники идут первыми.
+#
 # URL, лицензию и условия использования каждого источника проверять перед
-# включением (см. docs/SOURCE_POLICY.md).
+# включением (см. docs/SOURCE_POLICY.md — там же реестр с датами проверки).
 
 sources:
   - id: iptv-org-ru
@@ -24,6 +29,38 @@ sources:
     public_policy: review
     refresh_hours: 24
     url: "https://iptv-org.github.io/iptv/countries/ru.m3u"
+
+  - id: ngrch-ru
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://ngrch.github.io/iptv/ru.m3u"
+    # Проверено 2026-11-09: 978 записей, RU-каталог (Первый, Россия 1,
+    # региональные), tvg-id у ~21%, 3 секретных URL (отсечёт политика).
+
+  - id: iptvmir-mega
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/IPTV_MEGA_PLAYLIST.m3u"
+    # Проверено 2026-11-09: 8040 записей, мега-агрегатор (внутри iptv-org,
+    # Rafail1982, M3U.SU и др.); много нероссийского контента и 393
+    # секретных URL (автоматически исключаются публикацией). Каталог
+    # растёт до ~9k потоков — concurrency поднят до 16 в app.yaml.
+
+  - id: loganet
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://loganettv.vercel.app/all.m3u"
+    # Недоступен на момент проверки (2026-11-09, таймаут из РФ и извне) —
+    # включён: ошибка источника не валит discovery, подхватится при оживании.
 
   - id: free-tv
     adapter: free_tv

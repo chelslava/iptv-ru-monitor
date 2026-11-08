@@ -13,7 +13,9 @@ paths:
 probe_location: local
 
 check:
-  concurrency: 8
+  # 16 параллельных запросов: каталог вырос до ~9k потоков после
+  # подключения агрегаторов (ngrch, IPTVMIR). Для VDS можно снизить.
+  concurrency: 16
   max_redirects: 5
   http_timeout_seconds: 10.0
   hls_timeout_seconds: 15.0

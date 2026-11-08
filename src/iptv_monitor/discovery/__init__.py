@@ -14,6 +14,7 @@ from .base import DiscoveredStream, SourceAdapter, parse_m3u
 from .custom_m3u import CustomM3uAdapter
 from .free_tv import FreeTvAdapter
 from .iptv_org import IptvOrgAdapter
+from .remote_m3u import RemoteM3uAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ _ADAPTERS: dict[str, type[SourceAdapter]] = {
     "iptv_org": IptvOrgAdapter,
     "free_tv": FreeTvAdapter,
     "custom_m3u": CustomM3uAdapter,
+    "remote_m3u": RemoteM3uAdapter,
 }
 
 
