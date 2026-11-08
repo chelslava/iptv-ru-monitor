@@ -51,14 +51,17 @@ COUNT=$(wc -l < "$RESULT")
 
 echo "==> [$LABEL] Публикация $COUNT результатов в ветку $BRANCH"
 WORKTREE="$(mktemp -d)"
-cleanup() { git worktree remove --force "$WORKTREE" 2>/dev/null || true; }
+cleanup() {
+    git worktree remove --force "$WORKTREE" 2>/dev/null || true
+    git worktree prune
+}
 trap cleanup EXIT
 
 git fetch origin
 if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
-    git worktree add "$WORKTREE" -B "$BRANCH" "origin/$BRANCH" 1>&2
+    git worktree add -B "$BRANCH" "$WORKTREE" "origin/$BRANCH" 1>&2
 else
-    git worktree add "$WORKTREE" --orphan "$BRANCH" 1>&2
+    git worktree add --orphan -b "$BRANCH" "$WORKTREE" 1>&2
 fi
 
 cp "$RESULT" "$WORKTREE/checks-${LABEL}-${STAMP}.jsonl"
