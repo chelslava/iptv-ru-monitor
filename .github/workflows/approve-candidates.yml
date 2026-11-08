@@ -63,6 +63,9 @@ jobs:
           git add data/state/approved_streams.yaml
           ADDED=$(git diff --cached --numstat | awk '{print $1}')
           git commit -m "chore(approval): +${ADDED} candidate streams"
+          # Обновить remote-refs перед force-with-lease: shallow-checkout
+          # не знает о состоянии ветки от предыдущих прогонов.
+          git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null || true
           git push origin "$BRANCH" --force-with-lease
 
           python - <<'PY' > pr_body.md
