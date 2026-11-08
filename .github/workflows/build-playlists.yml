@@ -61,12 +61,28 @@ jobs:
           run-id: ${{ steps.runs.outputs.ru_id }}
           github-token: ${{ github.token }}
 
+      - name: Fetch home-ru probe results
+        # Домашняя RU-точка публикует результаты в ветку probe/ru
+        # (scripts/ru_probe_push.sh); забираем все файлы истории оттуда.
+        run: |
+          mkdir -p probe/ru
+          if git fetch origin probe/ru 2>/dev/null; then
+            git ls-tree --name-only origin/probe/ru -- 'checks-home-ru-*.jsonl' \
+              | while read -r f; do git show "origin/probe/ru:$f" >> "probe/ru/$f"; done
+            echo "home-ru files: $(ls -1 probe/ru | wc -l)"
+          else
+            echo "branch probe/ru not found — home probe results skipped"
+          fi
+
       - name: Merge check history
         run: |
           mkdir -p data/state
           : > data/state/checks.jsonl
           if compgen -G 'artifacts/*/*.jsonl' > /dev/null; then
             cat artifacts/*/*.jsonl >> data/state/checks.jsonl
+          fi
+          if compgen -G 'probe/ru/*.jsonl' > /dev/null; then
+            cat probe/ru/*.jsonl >> data/state/checks.jsonl
           fi
           echo "merged records: $(wc -l < data/state/checks.jsonl)"
 

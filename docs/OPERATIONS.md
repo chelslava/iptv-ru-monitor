@@ -41,6 +41,38 @@ Scheduled workflow может запускаться с задержкой — �
 Без `VDS_HOST` workflow `check-ru.yml` завершается успешно с пометкой о
 пропуске (не блокирует сборку).
 
+## Домашний ПК как RU-точка (home-ru)
+
+Постоянная точка наблюдения без VDS — ночной прогон с домашнего компьютера
+(резидентный RU IP, метка `home-ru`):
+
+- `scripts/ru_probe_push.sh` — обновляет каталог, проверяет потоки
+  (`IPTV_LIMIT`, по умолчанию 50; `IPTV_LEVELS`, по умолчанию `http,hls`)
+  и публикует результаты в ветку `probe/ru` (хранятся последние 30 файлов).
+- `scripts/ru_probe_task.cmd` — обёртка для планировщика Windows;
+  задача «iptv-ru-monitor home-ru probe» ежедневно в 03:40 по местному времени.
+- `build-playlists.yml` забирает файлы из `probe/ru` и сливает их в общую
+  историю вместе с артефактами `checks-global`/`checks-ru`.
+
+Регистрация задачи (однократно, из Git Bash):
+
+```bash
+MSYS_NO_PATHCONV=1 schtasks /Create /F /SC DAILY /ST 03:40 \
+  /TN "iptv-ru-monitor home-ru probe" \
+  /TR "D:\Repo\iptv-ru-monitor\scripts\ru_probe_task.cmd"
+```
+
+Лог: `data/state/home-ru-task.log`. Задача выполняется под текущим
+пользователем: если ПК выключен в 03:40, прогон пропускается — история
+накопится со следующих ночей.
+
+Ручной прогон:
+
+```bash
+bash scripts/ru_probe_push.sh                 # 50 потоков, http,hls
+IPTV_LIMIT=200 IPTV_LEVELS=http,hls bash scripts/ru_probe_push.sh
+```
+
 ## Ретенция истории
 
 `config/app.yaml → retention`: 90 дней, максимум 200 записей на поток.
