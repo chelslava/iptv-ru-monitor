@@ -88,8 +88,12 @@ jobs:
               )
           lines += [
               "",
-              "Merge PR = подтверждение; следующая сборка включит потоки в плейлисты.",
-              "Полные данные: `iptv-monitor candidates` локально или `data/state/candidates.json`.",
+              "**Merge PR = подтверждение** двух вещей:",
+              "1. технического состояния потоков (таблица выше);",
+              "2. прав источника — выполнен чек-лист [docs/SOURCE_POLICY.md](../../blob/main/docs/SOURCE_POLICY.md).",
+              "",
+              "Следующая сборка включит потоки в плейлисты. Полные данные:",
+              "`iptv-monitor candidates` локально или `data/state/candidates.json`.",
           ]
           print("\n".join(lines))
           PY
@@ -119,8 +123,9 @@ jobs:
               )
           lines += [
               "",
-              "**Подтверждение:** откройте PR по ссылке, проверьте diff и смержите —",
-              "следующая сборка включит потоки в плейлисты:",
+              "**Подтверждение:** откройте PR по ссылке, проверьте diff и чек-лист прав",
+              "в docs/SOURCE_POLICY.md, затем смержите — следующая сборка включит",
+              "потоки в плейлисты:",
               f"https://github.com/{repo}/compare/{branch}...{branch}?expand=1",
               "",
               "_Чтобы workflow сразу создавал PR: Settings → Actions → General →",
