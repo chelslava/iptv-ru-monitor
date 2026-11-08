@@ -45,7 +45,9 @@ jobs:
             curl -sL -H "Authorization: Bearer $GH_TOKEN" \
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
               -o /tmp/global.zip
-            unzip -o -j /tmp/global.zip -d artifacts/global
+            # У каждого артефакта файл называется одинаково — свой подкаталог на ран,
+            # иначе unzip перезапишет предыдущие.
+            unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
           done
           echo "global files: $(ls -1 artifacts/global | wc -l)"
 
