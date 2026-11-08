@@ -12,10 +12,11 @@ _XMLTV_TIME_FORMATS = ("%Y%m%d%H%M%S %z", "%Y%m%d%H%M%S")
 
 
 class EpgChannelData(BaseModel):
-    """Канал из XMLTV со списком названий."""
+    """Канал из XMLTV со списком названий и логотипом."""
 
     id: str
     display_names: list[str]
+    icon_url: str | None = None
 
 
 class EpgProgramme(BaseModel):
@@ -55,7 +56,9 @@ def parse_xmltv(source: str | Path) -> tuple[list[EpgChannelData], list[EpgProgr
         if not channel_id:
             continue
         names = [(el.text or "").strip() for el in element.findall("display-name") if el.text]
-        channels.append(EpgChannelData(id=channel_id, display_names=names))
+        icon_el = element.find("icon")
+        icon_url = icon_el.get("src") if icon_el is not None else None
+        channels.append(EpgChannelData(id=channel_id, display_names=names, icon_url=icon_url))
 
     programmes: list[EpgProgramme] = []
     for element in root.findall("programme"):

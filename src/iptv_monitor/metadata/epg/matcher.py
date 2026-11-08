@@ -64,8 +64,11 @@ def match_epg(
             continue
 
         # 2. Ручные алиасы (не перезаписываются нечётким совпадением).
+        # Алиас применим, только если его tvg_id есть в этом EPG-источнике:
+        # таблицы алиасов привязаны к формату id конкретного провайдера
+        # (например, «1tv.ru» у iptv-org против числовых id epg.pw).
         alias = aliases.lookup(channel.name, *channel.alt_names)
-        if alias is not None:
+        if alias is not None and alias.tvg_id in epg_ids:
             matches.append(
                 EpgMatch(
                     channel_id=channel.channel_id,

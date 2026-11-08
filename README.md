@@ -177,8 +177,8 @@ dist/
 1. Дождитесь публикации артефактов (workflow `publish-pages.yml`).
 2. TiviMate → *Настройки → Плейлисты → Добавить плейлист → URL*:
    `https://<аккаунт>.github.io/iptv-ru-monitor/ru/russia.m3u`
-3. Источник EPG: `.../ru/russia.xml` (появится после включения EPG-источников
-   в `config/epg_sources.yaml`).
+3. Источник EPG: `.../ru/russia.xml` (генерируется из epg.pw, см.
+   `config/epg_sources.yaml`).
 4. Тематические подборки: `russia-hd.m3u`, `russia-kids.m3u`, `russia-sport.m3u`.
 
 Локально: соберите плейлист командой `uv run iptv-monitor build` и укажите

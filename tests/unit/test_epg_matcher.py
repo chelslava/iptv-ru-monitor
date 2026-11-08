@@ -39,12 +39,18 @@ def test_manual_alias_wins_over_name() -> None:
     baseline = match_epg([_channel("Первый")], EPG, AliasIndex([]))
     assert baseline and baseline[0].method == MatchMethod.NORMALIZED_NAME
 
+    # Алиас применим только если его tvg_id есть в EPG (формат id провайдера).
+    epg_with_alias = EPG + [EpgChannelData(id="alias-1tv.ru", display_names=["Иное имя"])]
     aliases = AliasIndex([AliasRule(name="Первый", tvg_id="alias-1tv.ru", manual=True)])
-    matches = match_epg([_channel("Первый")], EPG, aliases)
+    matches = match_epg([_channel("Первый")], epg_with_alias, aliases)
     assert len(matches) == 1
     assert matches[0].method == MatchMethod.ALIAS
     assert matches[0].tvg_id == "alias-1tv.ru"
     assert matches[0].manual is True
+
+    # Если id алиаса в EPG нет — алиас пропускается, работает имя.
+    matches_no_id = match_epg([_channel("Первый")], EPG, aliases)
+    assert matches_no_id[0].method == MatchMethod.NORMALIZED_NAME
 
 
 def test_normalized_name_match_with_alt_names() -> None:

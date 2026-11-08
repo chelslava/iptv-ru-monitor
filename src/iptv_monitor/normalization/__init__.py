@@ -13,6 +13,22 @@ from .channel_names import build_channel_id, clean_display_name
 from .country import detect_country
 
 
+def _normalize_logo_url(url: str | None) -> str | None:
+    """Привести URL логотипа к виду, который понимают плееры.
+
+    Протоколо-относительные «//host/…» встречаются в источниках — TiviMate
+    такие не рендерит, дополняем схемой https. Некорректные схемы отбрасываем.
+    """
+    if not url:
+        return None
+    url = url.strip()
+    if url.startswith("//"):
+        return f"https:{url}"
+    if url.startswith(("http://", "https://")):
+        return url
+    return None
+
+
 def normalize_discovered(
     discovered: list[DiscoveredStream],
     sources: list[SourceConfig],
@@ -58,7 +74,7 @@ def normalize_discovered(
                     default=categories.default_category,
                 ),
                 tvg_id=entry.tvg_id,
-                logo_url=entry.tvg_logo,
+                logo_url=_normalize_logo_url(entry.tvg_logo),
                 is_public=is_public,
                 metadata_source=entry.source_id,
             )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import logging
 from collections import Counter
@@ -44,7 +45,14 @@ from .history.retention import prune_storage
 from .infrastructure.http_client import create_client
 from .infrastructure.logging import setup_logging
 from .infrastructure.storage import JsonlStorage, SqliteStorage, create_storage
-from .metadata import AliasIndex, EpgProgramme, match_epg, match_logos, parse_xmltv
+from .metadata import (
+    AliasIndex,
+    EpgProgramme,
+    match_epg,
+    match_logos,
+    parse_xmltv,
+    validate_logo,
+)
 from .normalization import normalize_discovered
 from .normalization.deduplication import deduplicate
 from .scoring import StreamScore, best_height, score_stream
@@ -233,9 +241,11 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
 
     matches: list = []
     programmes: list[EpgProgramme] = []
+    validated_logos: list = []
+    epg_channels_out: list = []
 
     async def _fetch() -> None:
-        nonlocal matches, programmes
+        nonlocal matches, programmes, validated_logos, epg_channels_out
         async with create_client(
             user_agent=settings.check.user_agent,
             timeout_seconds=settings.check.http_timeout_seconds,
@@ -247,29 +257,71 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                 except httpx.HTTPError:
                     logger.warning("EPG source %s failed", source.id, exc_info=True)
                     continue
+                # Некоторые провайдеры отдают XMLTV gzip-файлом (.xml.gz),
+                # а не content-encoding — распаковываем по magic bytes.
+                payload = response.content
+                if payload[:2] == b"\x1f\x8b":
+                    try:
+                        payload = gzip.decompress(payload)
+                    except OSError:
+                        logger.warning("EPG source %s: broken gzip", source.id)
+                        continue
                 try:
-                    epg_channels, programmes = parse_xmltv(response.text)
+                    epg_channels, programmes = parse_xmltv(
+                        payload.decode("utf-8", errors="replace")
+                    )
                 except ValueError:
                     logger.warning("EPG source %s: invalid XMLTV", source.id)
                     continue
                 matches = match_epg(channels, epg_channels, aliases)
+                epg_channels_out = list(epg_channels)
                 click.echo(f"EPG: источник {source.id}, {len(epg_channels)} каналов XMLTV")
                 break
 
-    if epg_sources:
+            # Логотипы: кандидаты проходят проверку доступности/MIME/размера
+            # (архитектура §10), непроходимые отбрасываются.
+            for logo in logo_matches:
+                logo_source = next((s for s in logos_cfg.sources if s.id == logo.source_id), None)
+                ok = await validate_logo(
+                    client,
+                    logo.logo_url,
+                    max_bytes=logo_source.max_bytes if logo_source else 2_097_152,
+                    allowed_mime=logo_source.allowed_mime if logo_source else [],
+                )
+                if ok:
+                    validated_logos.append(logo)
+                else:
+                    logger.info("logo rejected: %s", logo.logo_url)
+
+    logo_matches = match_logos(channels, logos_cfg.sources, logos_cfg.overrides)
+
+    if epg_sources or logo_matches:
         asyncio.run(_fetch())
     else:
         click.echo("EPG: нет включённых источников (config/epg_sources.yaml).")
 
-    logo_matches = match_logos(channels, logos_cfg.sources, logos_cfg.overrides)
     by_method = Counter(m.method.value for m in matches)
 
+    # tvg_id применяется безусловно: актуальное сопоставление важнее
+    # метаданных discovery (m3u и xmltv должны использовать единые id).
+    # Логотипы из EPG: иконка сопоставленного канала достаётся каналу
+    # без собственного логотипа (покрытие ~24% после отбрасывания data: URI).
+    from .normalization import _normalize_logo_url
+
+    epg_icons_used = 0
+    epg_icon_by_id = {c.id: c.icon_url for c in epg_channels_out}
     for match in matches:
         for channel in channels:
-            if channel.channel_id == match.channel_id and not channel.tvg_id:
-                channel.tvg_id = match.tvg_id
-                break
-    for logo in logo_matches:
+            if channel.channel_id != match.channel_id:
+                continue
+            channel.tvg_id = match.tvg_id
+            if not channel.logo_url:
+                icon = _normalize_logo_url(epg_icon_by_id.get(match.tvg_id))
+                if icon:
+                    channel.logo_url = icon
+                    epg_icons_used += 1
+            break
+    for logo in validated_logos:
         for channel in channels:
             if channel.channel_id == logo.channel_id and not channel.logo_url:
                 channel.logo_url = logo.logo_url
@@ -296,11 +348,22 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
         STATE_EPG_PROGRAMMES,
         [p.model_dump(mode="json") for p in programmes],
     )
+    applied_logos = sum(
+        1 for logo in validated_logos if not _channel_logo_existed(channels, logo.channel_id)
+    )
     click.echo(
         f"Enrich: EPG-совпадений {len(matches)} ({dict(by_method)}), "
-        f"логотипов добавлено {len(logo_matches)}"
+        f"логотипов прошло проверку {len(validated_logos)} из {len(logo_matches)}, "
+        f"добавлено {applied_logos}, иконок из EPG {epg_icons_used}"
     )
-    return {"epg_matches": len(matches), "logos": len(logo_matches)}
+    return {"epg_matches": len(matches), "logos": applied_logos}
+
+
+def _channel_logo_existed(channels: list[Channel], channel_id: str) -> bool:
+    for channel in channels:
+        if channel.channel_id == channel_id:
+            return bool(channel.logo_url)
+    return False
 
 
 def run_score(settings: AppSettings) -> dict[str, StreamScore]:
