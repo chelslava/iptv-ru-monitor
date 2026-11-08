@@ -13,6 +13,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   actions: read
 
 concurrency:
@@ -90,8 +91,55 @@ jobs:
           print("\n".join(lines))
           PY
 
-          gh pr create \
+          if gh pr create \
             --base main --head "$BRANCH" \
             --title "chore(approval): кандидаты к публикации (${ADDED})" \
-            --body-file pr_body.md \
-            || echo "PR уже открыт — ветка обновлена push'ем"
+            --body-file pr_body.md; then
+            echo "PR создан"
+          else
+            # GITHUB_TOKEN не может создавать PR, если в настройках репозитория
+            # выключено «Allow GitHub Actions to create and approve pull requests».
+            # Запасной путь: issue с таблицей и ссылкой на создание PR в один клик.
+            echo "Создание PR запрещено настройкой репозитория — оформляю issue"
+            python - <<'PY' > issue_body.md
+            import json
+            import os
+
+            repo = os.environ["GITHUB_REPOSITORY"]
+            branch = os.environ["BRANCH"]
+            candidates = json.load(open("data/state/candidates.json", encoding="utf-8"))
+            lines = [
+                "Автоматически подготовленные кандидаты на подтверждение публикации.",
+                "",
+                "Критерии: score >= 75, проверок >= 6, успех минимум из двух точек",
+                "наблюдения, HLS-сегмент получен (`config/quality_profiles.yaml -> approval`).",
+                "",
+                "| Канал | stream_id | Score | Уровень | Проверок | Точки |",
+                "|---|---|---|---|---|---|",
+            ]
+            for c in candidates:
+                lines.append(
+                    f"| {c['channel']} | `{c['stream_id']}` | {c['score']} | "
+                    f"{c['level']} | {c['checks']} | {', '.join(c['probe_locations'])} |"
+                )
+            lines += [
+                "",
+                "**Подтверждение:** откройте PR по ссылке, проверьте diff и смержите —",
+                f"следующая сборка включит потоки в плейлисты:",
+                f"https://github.com/{repo}/compare/{branch}...{branch}?expand=1",
+                "",
+                "_Чтобы workflow сразу создавал PR: Settings → Actions → General →",
+                "«Allow GitHub Actions to create and approve pull requests»._",
+            ]
+            print("\n".join(lines))
+            PY
+            existing=$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+              --search "in:title Кандидаты к публикации" --json number --jq '.[0].number // empty')
+            if [[ -n "$existing" ]]; then
+              gh issue comment "$existing" --body-file issue_body.md
+            else
+              gh issue create \
+                --title "Кандидаты к публикации (требуется подтверждение)" \
+                --body-file issue_body.md
+            fi
+          fi
