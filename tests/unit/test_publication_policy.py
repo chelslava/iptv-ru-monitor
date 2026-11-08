@@ -52,6 +52,16 @@ def test_review_requires_approval() -> None:
     assert decision.allowed
 
 
+def test_approved_review_overrides_non_public_channel() -> None:
+    # Реальный кейс: review-источник => channel.is_public=False, но
+    # подтверждение stream_id и есть допуск к публикации.
+    stream = _stream()
+    decision = decide_publication(
+        _channel(is_public=False), stream, _source("review"), {stream.stream_id}
+    )
+    assert decision.allowed, decision.reasons
+
+
 def test_deny_policy_never_publishes() -> None:
     decision = decide_publication(_channel(), _stream(), _source("deny"))
     assert not decision.allowed

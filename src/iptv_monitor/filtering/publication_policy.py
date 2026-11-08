@@ -78,7 +78,15 @@ def decide_publication(
         reasons.append("stream disabled")
     if stream.publication_status == PublicationStatus.REJECTED:
         reasons.append("stream rejected manually")
-    if not channel.is_public:
+
+    # Подтверждение review-источника и есть допуск канала к публикации:
+    # без is_public у review-источников подтверждение не имело бы силы.
+    approved_review = bool(
+        source
+        and source.public_policy == PublicPolicy.REVIEW
+        and stream.stream_id in approved_ids
+    )
+    if not channel.is_public and not approved_review:
         reasons.append("channel is not public")
 
     secret = url_has_secrets(stream.url)
@@ -91,7 +99,7 @@ def decide_publication(
         policy = source.public_policy
         if policy == PublicPolicy.DENY:
             reasons.append(f"source policy denies publication ({source.id})")
-        elif policy == PublicPolicy.REVIEW and stream.stream_id not in approved_ids:
+        elif policy == PublicPolicy.REVIEW and not approved_review:
             reasons.append(f"awaiting review approval (source {source.id})")
         # ALLOW — публикация разрешена.
 
