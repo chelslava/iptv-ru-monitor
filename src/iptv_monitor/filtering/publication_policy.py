@@ -82,9 +82,7 @@ def decide_publication(
     # Подтверждение review-источника и есть допуск канала к публикации:
     # без is_public у review-источников подтверждение не имело бы силы.
     approved_review = bool(
-        source
-        and source.public_policy == PublicPolicy.REVIEW
-        and stream.stream_id in approved_ids
+        source and source.public_policy == PublicPolicy.REVIEW and stream.stream_id in approved_ids
     )
     if not channel.is_public and not approved_review:
         reasons.append("channel is not public")
