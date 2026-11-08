@@ -92,8 +92,12 @@ jobs:
         run: |
           mkdir -p data/state
           : > data/state/checks.jsonl
-          if compgen -G 'artifacts/*/*.jsonl' > /dev/null; then
-            cat artifacts/*/*.jsonl >> data/state/checks.jsonl
+          # global-артефакты распакованы в artifacts/global/<run_id>/*.jsonl
+          if compgen -G 'artifacts/global/*/*.jsonl' > /dev/null; then
+            cat artifacts/global/*/*.jsonl >> data/state/checks.jsonl
+          fi
+          if compgen -G 'artifacts/ru/*.jsonl' > /dev/null; then
+            cat artifacts/ru/*.jsonl >> data/state/checks.jsonl
           fi
           if compgen -G 'probe/ru/*.jsonl' > /dev/null; then
             cat probe/ru/*.jsonl >> data/state/checks.jsonl
