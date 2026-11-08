@@ -9,8 +9,8 @@ from ..domain.source import SourceConfig
 from ..domain.stream import Stream, detect_protocol, make_stream_id
 from ..settings import CategoriesFile
 from .categories import classify_channel
-from .channel_names import build_channel_id
-from .country import normalize_country
+from .channel_names import build_channel_id, clean_display_name
+from .country import detect_country
 
 
 def normalize_discovered(
@@ -20,8 +20,9 @@ def normalize_discovered(
 ) -> tuple[list[Channel], list[Stream]]:
     """Нормализовать записи источников в каналы и потоки.
 
-    Каждая запись связана с источником происхождения (source-first) и
-    наследует его страну и политику публикации.
+    Каждая запись связана с источником происхождения (source-first).
+    Страна определяется по tvg-id/названию, а не наследуется слепо
+    от источника — агрегаторы содержат смешанный контент.
     """
     sources_by_id = {source.id: source for source in sources}
     channels: dict[str, Channel] = {}
@@ -29,11 +30,17 @@ def normalize_discovered(
 
     for entry in discovered:
         source = sources_by_id.get(entry.source_id)
-        country = normalize_country(entry.country) or (source.country if source else None)
+        country = detect_country(
+            tvg_id=entry.tvg_id,
+            entry_country=entry.country,
+            name=entry.name,
+            group_title=entry.group_title,
+            source_country=source.country if source else None,
+        )
         if country is None:
             continue  # запись без страны не участвует в каталоге
 
-        name = entry.tvg_name or entry.name
+        name = clean_display_name(entry.tvg_name or entry.name)
         channel_id = build_channel_id(name, country)
         is_public = bool(source and source.public_policy == PublicPolicy.ALLOW)
         channel = channels.get(channel_id)

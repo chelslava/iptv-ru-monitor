@@ -47,7 +47,7 @@ Scheduled workflow может запускаться с задержкой — �
 (резидентный RU IP, метка `home-ru`):
 
 - `scripts/ru_probe_push.sh` — обновляет каталог, проверяет потоки
-  (`IPTV_LIMIT`, по умолчанию 50; `IPTV_LEVELS`, по умолчанию `http,hls`)
+  (`IPTV_LIMIT`, по умолчанию 300; `IPTV_LEVELS`, по умолчанию `http,hls`)
   и публикует результаты в ветку `probe/ru` (хранятся последние 30 файлов).
 - `scripts/ru_probe_task.cmd` — обёртка для планировщика Windows;
   задача «iptv-ru-monitor home-ru probe» ежедневно в 03:40 по местному времени.
@@ -70,7 +70,7 @@ MSYS_NO_PATHCONV=1 schtasks /Create /F /SC DAILY /ST 03:40 \
 
 ```bash
 bash scripts/ru_probe_push.sh                 # 50 потоков, http,hls
-IPTV_LIMIT=200 IPTV_LEVELS=http,hls bash scripts/ru_probe_push.sh
+IPTV_LIMIT=500 IPTV_LEVELS=http,hls,ffprobe bash scripts/ru_probe_push.sh
 ```
 
 ## Ретенция истории

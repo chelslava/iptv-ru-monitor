@@ -59,16 +59,20 @@ sources:
     public_policy: review
     refresh_hours: 24
     url: "https://loganettv.vercel.app/all.m3u"
-    # Недоступен на момент проверки (2026-11-09, таймаут из РФ и извне) —
-    # включён: ошибка источника не валит discovery, подхватится при оживании.
+    # 2026-11-09: отвечает 402 Payment Required (тариф vercel-приложения
+    # исчерпан) — включён: ошибка источника не валит discovery, подхватится
+    # при восстановлении.
 
   - id: free-tv
     adapter: free_tv
-    enabled: false # включить после проверки лицензии и актуального URL
+    enabled: true
     country: RU
     public_policy: review
     refresh_hours: 24
     url: "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_russia.m3u8"
+    # Проверено 2026-11-09: LICENSE у репозитория отсутствует (права на данные
+    # неясны -> review), курируется против платных подписок; 59 записей
+    # (group-title="Russia"), маркеры Ⓢ/Ⓖ в названиях очищаются clean_display_name.
 
   - id: custom-local
     adapter: custom_m3u

@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"
 
 LEVELS="${IPTV_LEVELS:-http,hls}"
-LIMIT="${IPTV_LIMIT:-100}"
+LIMIT="${IPTV_LIMIT:-300}"
 BRANCH="${PROBE_BRANCH:-probe/ru}"
 LABEL="${IPTV_PROBE_LABEL:-home-ru}"
 STAMP="$(date -u +%Y%m%d-%H%M)"
