@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Слияние истории проверок в data/state/checks.jsonl.
+# Источники: артефакты check-global (последние 5 прогонов), артефакт check-ru
+# и файлы ветки probe/ru (домашняя RU-точка).
+# Используется build-playlists.yml и approve-candidates.yml.
+# Требует: выполненный checkout, GITHUB_REPOSITORY, GH_TOKEN.
+
+set -euo pipefail
+
+: "${GITHUB_REPOSITORY:?нужен GITHUB_REPOSITORY}"
+: "${GH_TOKEN:?нужен GH_TOKEN}"
+
+mkdir -p data/state artifacts/global artifacts/ru probe/ru
+
+echo "==> Артефакты check-global (последние 5 успешных прогонов)"
+for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
+    --status success --limit 5 --json databaseId -q '.[].databaseId'); do
+  art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+    --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
+  [[ -z "$art_id" ]] && continue
+  curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+    "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
+    -o /tmp/global.zip
+  # Файл в каждом артефакте один и тот же — свой подкаталог на прогон.
+  unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
+done
+echo "    файлов: $(find artifacts/global -name '*.jsonl' | wc -l)"
+
+echo "==> Артефакт check-ru (последний успешный прогон)"
+ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \
+  --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
+if [[ -n "$ru_id" ]]; then
+  art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ru_id/artifacts" \
+    --jq '.artifacts[] | select(.name=="checks-ru") | .id' | head -1)
+  if [[ -n "$art_id" ]]; then
+    curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+      "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
+      -o /tmp/ru.zip
+    unzip -o -j /tmp/ru.zip -d artifacts/ru || true
+  fi
+fi
+
+echo "==> Ветка probe/ru (домашняя RU-точка)"
+if git fetch origin "+refs/heads/probe/ru:refs/remotes/origin/probe/ru" 2>/dev/null; then
+  git ls-tree --name-only refs/remotes/origin/probe/ru \
+    | grep -E '^checks-home-ru-[0-9T:-]+\.jsonl$' \
+    | while read -r f; do git show "refs/remotes/origin/probe/ru:$f" >> "probe/ru/$f"; done
+  echo "    файлов: $(ls -1 probe/ru | wc -l)"
+else
+  echo "    ветка не найдена — пропущено"
+fi
+
+echo "==> Слияние"
+: > data/state/checks.jsonl
+if compgen -G 'artifacts/global/*/*.jsonl' > /dev/null; then
+  cat artifacts/global/*/*.jsonl >> data/state/checks.jsonl
+fi
+if compgen -G 'artifacts/ru/*.jsonl' > /dev/null; then
+  cat artifacts/ru/*.jsonl >> data/state/checks.jsonl
+fi
+if compgen -G 'probe/ru/*.jsonl' > /dev/null; then
+  cat probe/ru/*.jsonl >> data/state/checks.jsonl
+fi
+echo "    записей: $(wc -l < data/state/checks.jsonl)"

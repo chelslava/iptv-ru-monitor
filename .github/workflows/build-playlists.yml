@@ -30,79 +30,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Download global check results (last 5 runs)
-        # История github-раннера должна накапливаться между сборками:
-        # забираем артефакты последних успешных прогонов check-global.
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p artifacts/global
-          for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
-              --status success --limit 5 --json databaseId -q '.[].databaseId'); do
-            art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
-              --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
-            [[ -z "$art_id" ]] && continue
-            curl -sL -H "Authorization: Bearer $GH_TOKEN" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
-              -o /tmp/global.zip
-            # У каждого артефакта файл называется одинаково — свой подкаталог на ран,
-            # иначе unzip перезапишет предыдущие.
-            unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
-          done
-          echo "global files: $(ls -1 artifacts/global | wc -l)"
-
-      - name: Download RU check results
-        # Результаты VDS-точки (workflow check-ru), если настроена.
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p artifacts/ru
-          ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \
-            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
-          if [[ -z "$ru_id" ]]; then
-            echo "check-ru runs not found — skipped"
-            exit 0
-          fi
-          art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ru_id/artifacts" \
-            --jq '.artifacts[] | select(.name=="checks-ru") | .id' | head -1)
-          [[ -z "$art_id" ]] && exit 0
-          curl -sL -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
-            -o /tmp/ru.zip
-          unzip -o -j /tmp/ru.zip -d artifacts/ru || true
-          echo "ru files: $(ls -1 artifacts/ru | wc -l)"
-
-      - name: Fetch home-ru probe results
-        # Домашняя RU-точка публикует результаты в ветку probe/ru
-        # (scripts/ru_probe_push.sh); забираем все файлы истории оттуда.
-        # Явный refspec: shallow-checkout не создаёт remote-ref при
-        # обычном `git fetch origin <branch>`.
-        run: |
-          mkdir -p probe/ru
-          if git fetch origin "+refs/heads/probe/ru:refs/remotes/origin/probe/ru" 2>/dev/null; then
-            git ls-tree --name-only refs/remotes/origin/probe/ru \
-              | grep -E '^checks-home-ru-[0-9T:-]+\.jsonl$' \
-              | while read -r f; do git show "refs/remotes/origin/probe/ru:$f" >> "probe/ru/$f"; done
-            echo "home-ru files: $(ls -1 probe/ru | wc -l)"
-          else
-            echo "branch probe/ru not found — home probe results skipped"
-          fi
-
       - name: Merge check history
-        run: |
-          mkdir -p data/state
-          : > data/state/checks.jsonl
-          # global-артефакты распакованы в artifacts/global/<run_id>/*.jsonl
-          if compgen -G 'artifacts/global/*/*.jsonl' > /dev/null; then
-            cat artifacts/global/*/*.jsonl >> data/state/checks.jsonl
-          fi
-          if compgen -G 'artifacts/ru/*.jsonl' > /dev/null; then
-            cat artifacts/ru/*.jsonl >> data/state/checks.jsonl
-          fi
-          if compgen -G 'probe/ru/*.jsonl' > /dev/null; then
-            cat probe/ru/*.jsonl >> data/state/checks.jsonl
-          fi
-          echo "merged records: $(wc -l < data/state/checks.jsonl)"
+        # Артефакты check-global/check-ru + ветка probe/ru -> data/state/checks.jsonl
+        run: bash scripts/merge_history.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Refresh catalog and enrich
         run: |

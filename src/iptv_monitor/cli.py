@@ -21,8 +21,11 @@ from .domain.channel import Channel
 from .domain.check_result import CheckResult, now_utc
 from .domain.stream import Stream
 from .filtering import (
+    ApprovalCandidate,
     PublishDecision,
+    candidates_to_dicts,
     decide_publication,
+    find_candidates,
     load_approved_ids,
     select_streams,
 )
@@ -62,6 +65,7 @@ logger = logging.getLogger(__name__)
 STATE_CHANNELS = "channels.json"
 STATE_STREAMS = "streams.json"
 STATE_SCORES = "scores.json"
+STATE_CANDIDATES = "candidates.json"
 STATE_EPG_MATCHES = "epg_matches.json"
 STATE_EPG_PROGRAMMES = "epg_programmes.json"
 
@@ -338,6 +342,89 @@ def run_score(settings: AppSettings) -> dict[str, StreamScore]:
     return scores
 
 
+def run_candidates(
+    settings: AppSettings, *, country: str = "RU", apply_changes: bool = False
+) -> list[ApprovalCandidate]:
+    """Найти кандидатов на подтверждение публикации по отчётной истории.
+
+    Кандидат: рейтинг и число проверок по критериям config/quality_profiles.yaml
+    (approval), успех минимум из двух точек наблюдения, HLS-сегмент получен.
+    С --apply кандидаты дописываются в approved_streams.yaml.
+    """
+    quality = load_quality(settings.config_dir)
+    approval = quality.approval
+    sources_by_id = {s.id: s for s in load_sources(settings.config_dir)}
+    channels = _load_channels(settings)
+    streams = _load_streams(settings)
+    channels_by_id = {c.channel_id: c for c in channels}
+    approved = load_approved_ids(settings.state_dir)
+
+    storage = create_storage(settings)
+    history = storage.load()
+    storage.close()
+    grouped: dict[str, list[CheckResult]] = {}
+    for result in history:
+        grouped.setdefault(result.stream_id, []).append(result)
+
+    decisions: dict[str, PublishDecision] = {}
+    for stream in streams:
+        channel = channels_by_id.get(stream.channel_id)
+        if channel is not None:
+            decisions[stream.stream_id] = decide_publication(
+                channel, stream, sources_by_id.get(stream.source_id), approved
+            )
+
+    scores = {
+        stream.stream_id: score_stream(
+            stream.stream_id,
+            grouped.get(stream.stream_id, []),
+            weights=quality.weights,
+            levels=quality.levels,
+            min_checks=approval.min_checks,
+        )
+        for stream in streams
+    }
+
+    candidates = find_candidates(
+        approval=approval,
+        channels=channels,
+        streams=streams,
+        scores=scores,
+        decisions=decisions,
+        history=grouped,
+        country=country,
+    )
+    _save_state(settings, STATE_CANDIDATES, candidates_to_dicts(candidates))
+
+    click.echo(
+        f"Кандидаты: {len(candidates)} (критерии: score>={approval.min_score}, "
+        f"проверок>={approval.min_checks}, точек>={approval.min_probe_locations})"
+    )
+    for candidate in candidates[:10]:
+        click.echo(
+            f"  {candidate.channel_name}: score={candidate.score} "
+            f"({candidate.level}, проверок {candidate.checks}, "
+            f"точки: {','.join(candidate.probe_locations)})"
+        )
+
+    if apply_changes and candidates:
+        merged = sorted(approved | {c.stream_id for c in candidates})
+        path = settings.state_dir / "approved_streams.yaml"
+        header = "\n".join(
+            [
+                "# Подтверждённые к публикации stream_id (public_policy: review).",
+                "# Дополняется автоматически кандидатами (iptv-monitor candidates --apply)",
+                "# и вручную; детали — data/state/candidates.json и PR approve-candidates.",
+                "stream_ids:",
+                "",
+            ]
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(header + "".join(f"  - {sid}\n" for sid in merged), encoding="utf-8")
+        click.echo(f"Подтверждено +{len(merged) - len(approved)} (всего {len(merged)})")
+    return candidates
+
+
 def run_build(
     settings: AppSettings, country: str = "RU", only_profile: str | None = None
 ) -> dict[str, object]:
@@ -531,6 +618,15 @@ def enrich(settings: AppSettings) -> None:
 def score(settings: AppSettings) -> None:
     """Рассчитать рейтинг потоков по истории."""
     run_score(settings)
+
+
+@cli.command("candidates")
+@click.option("--country", default="RU", help="Код страны.")
+@click.option("--apply", is_flag=True, help="Дописать кандидатов в approved_streams.yaml.")
+@click.pass_obj
+def candidates_cmd(settings: AppSettings, country: str, apply: bool) -> None:
+    """Кандидаты на подтверждение публикации (см. quality_profiles.yaml -> approval)."""
+    run_candidates(settings, country=country, apply_changes=apply)
 
 
 @cli.command()

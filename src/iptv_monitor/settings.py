@@ -184,6 +184,21 @@ class QualityLevels(BaseModel):
     unstable: int = 50
 
 
+class ApprovalSettings(BaseModel):
+    """Критерии кандидатов на подтверждение публикации.
+
+    Кандидат — поток с рейтингом, проверенный минимум из двух точек
+    наблюдения и отдавший HLS-сегмент. Подтверждение выполняет человек
+    (merge PR от workflow approve-candidates).
+    """
+
+    min_score: float = 75
+    min_checks: int = 6
+    min_probe_locations: int = 2
+    require_segment: bool = True
+    max_per_run: int = 50
+
+
 class QualityProfileSettings(BaseModel):
     """Профиль отбора потоков в публичную сборку."""
 
@@ -198,6 +213,7 @@ class QualityFile(BaseModel):
     weights: QualityWeights = Field(default_factory=QualityWeights)
     levels: QualityLevels = Field(default_factory=QualityLevels)
     profiles: dict[str, QualityProfileSettings] = Field(default_factory=dict)
+    approval: ApprovalSettings = Field(default_factory=ApprovalSettings)
 
     def profile(self, profile_id: str) -> QualityProfileSettings:
         try:
@@ -218,6 +234,7 @@ def load_quality(config_dir: Path) -> QualityFile:
         weights=QualityWeights.model_validate(raw.get("weights", {})),
         levels=QualityLevels.model_validate(raw.get("levels", {})),
         profiles=profiles,
+        approval=ApprovalSettings.model_validate(raw.get("approval", {})),
     )
 
 
@@ -313,6 +330,7 @@ def load_logo_sources(config_dir: Path) -> LogoSourcesFile:
 
 __all__ = [
     "AliasRule",
+    "ApprovalSettings",
     "AppSettings",
     "CategoriesFile",
     "CategoryRule",

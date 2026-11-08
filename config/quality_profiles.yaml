@@ -37,3 +37,14 @@ profiles:
     min_score: 75
     min_checks: 8
     categories: [sports]
+
+# Кандидаты на подтверждение публикации (iptv-monitor candidates и workflow
+# approve-candidates). Поток становится кандидатом, если набрал рейтинг,
+# успешно проверен минимум из min_probe_locations точек наблюдения и
+# отдал HLS-сегмент. Подтверждение — merge PR (решение за человеком).
+approval:
+  min_score: 75
+  min_checks: 6
+  min_probe_locations: 2
+  require_segment: true
+  max_per_run: 50
