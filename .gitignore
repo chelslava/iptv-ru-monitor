@@ -24,6 +24,9 @@ data/cache/*
 !data/cache/.gitkeep
 data/state/*
 !data/state/.gitkeep
+# Подтверждённые к публикации потоки — единственный трекаемый файл состояния
+# (сборка в CI должна его видеть).
+!data/state/approved_streams.yaml
 
 # VDS check results (local emulation and real runs)
 deploy/vds/data/

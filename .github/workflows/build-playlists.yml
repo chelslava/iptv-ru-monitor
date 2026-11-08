@@ -30,36 +30,45 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Find latest check runs
-        id: runs
+      - name: Download global check results (last 5 runs)
+        # История github-раннера должна накапливаться между сборками:
+        # забираем артефакты последних успешных прогонов check-global.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          global_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
-            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
-          ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \
-            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
-          echo "global_id=${global_id}" >> "$GITHUB_OUTPUT"
-          echo "ru_id=${ru_id}" >> "$GITHUB_OUTPUT"
-          echo "global=${global_id} ru=${ru_id}"
-
-      - name: Download global check results
-        if: steps.runs.outputs.global_id != ''
-        uses: actions/download-artifact@v4
-        with:
-          name: checks-global
-          path: artifacts/global
-          run-id: ${{ steps.runs.outputs.global_id }}
-          github-token: ${{ github.token }}
+          mkdir -p artifacts/global
+          for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
+              --status success --limit 5 --json databaseId -q '.[].databaseId'); do
+            art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+              --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
+            [[ -z "$art_id" ]] && continue
+            curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
+              -o /tmp/global.zip
+            unzip -o -j /tmp/global.zip -d artifacts/global
+          done
+          echo "global files: $(ls -1 artifacts/global | wc -l)"
 
       - name: Download RU check results
-        if: steps.runs.outputs.ru_id != ''
-        uses: actions/download-artifact@v4
-        with:
-          name: checks-ru
-          path: artifacts/ru
-          run-id: ${{ steps.runs.outputs.ru_id }}
-          github-token: ${{ github.token }}
+        # Результаты VDS-точки (workflow check-ru), если настроена.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/ru
+          ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \
+            --status success --limit 1 --json databaseId -q '.[0].databaseId' || echo "")
+          if [[ -z "$ru_id" ]]; then
+            echo "check-ru runs not found — skipped"
+            exit 0
+          fi
+          art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ru_id/artifacts" \
+            --jq '.artifacts[] | select(.name=="checks-ru") | .id' | head -1)
+          [[ -z "$art_id" ]] && exit 0
+          curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
+            -o /tmp/ru.zip
+          unzip -o -j /tmp/ru.zip -d artifacts/ru || true
+          echo "ru files: $(ls -1 artifacts/ru | wc -l)"
 
       - name: Fetch home-ru probe results
         # Домашняя RU-точка публикует результаты в ветку probe/ru
