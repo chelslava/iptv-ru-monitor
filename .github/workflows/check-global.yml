@@ -37,7 +37,9 @@ jobs:
         run: uv sync --extra dev
 
       - name: Refresh catalog
-        run: uv run iptv-monitor discover --probe-location github-runner
+        run: uv run iptv-monitor discover
+        env:
+          IPTV_PROBE_LOCATION: github-runner
 
       - name: Check streams
         run: uv run iptv-monitor check --levels ${{ inputs.levels || 'http,hls' }} --probe-location github-runner

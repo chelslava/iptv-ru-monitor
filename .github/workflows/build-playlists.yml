@@ -72,8 +72,10 @@ jobs:
 
       - name: Refresh catalog and enrich
         run: |
-          uv run iptv-monitor discover --probe-location github-runner
+          uv run iptv-monitor discover
           uv run iptv-monitor enrich
+        env:
+          IPTV_PROBE_LOCATION: github-runner
 
       - name: Score and build
         run: |
