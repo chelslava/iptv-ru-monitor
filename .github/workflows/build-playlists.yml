@@ -64,11 +64,14 @@ jobs:
       - name: Fetch home-ru probe results
         # Домашняя RU-точка публикует результаты в ветку probe/ru
         # (scripts/ru_probe_push.sh); забираем все файлы истории оттуда.
+        # Явный refspec: shallow-checkout не создаёт remote-ref при
+        # обычном `git fetch origin <branch>`.
         run: |
           mkdir -p probe/ru
-          if git fetch origin probe/ru 2>/dev/null; then
-            git ls-tree --name-only origin/probe/ru -- 'checks-home-ru-*.jsonl' \
-              | while read -r f; do git show "origin/probe/ru:$f" >> "probe/ru/$f"; done
+          if git fetch origin "+refs/heads/probe/ru:refs/remotes/origin/probe/ru" 2>/dev/null; then
+            git ls-tree --name-only refs/remotes/origin/probe/ru \
+              | grep -E '^checks-home-ru-[0-9T:-]+\.jsonl$' \
+              | while read -r f; do git show "refs/remotes/origin/probe/ru:$f" >> "probe/ru/$f"; done
             echo "home-ru files: $(ls -1 probe/ru | wc -l)"
           else
             echo "branch probe/ru not found — home probe results skipped"
