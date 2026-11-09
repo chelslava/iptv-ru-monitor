@@ -30,12 +30,16 @@
         "redirect_invalid", "dns_error",
         "tls_error", "http_4xx", "http_5xx", "transport_error", "timeout",
         "invalid_content", "hls_invalid", "hls_variant_unavailable",
+        "playlist_empty",
         "segment_error", "ffprobe_unavailable", "ffprobe_timeout",
         "ffprobe_error", "playback_error", "unknown"
       ]
     },
     "error_message": {"type": ["string", "null"], "description": "Секреты отредактированы"},
     "ua_required": {"type": "boolean", "description": "Сервер требует браузерный User-Agent (issue #18)"},
+    "declared_height": {"type": ["integer", "null"], "description": "Высота из RESOLUTION master-плейлиста (issue #24)"},
+    "declared_bandwidth": {"type": ["integer", "null"], "description": "BANDWIDTH выбранного варианта (issue #24)"},
+    "retried": {"type": "boolean", "description": "Повтор после транзиентной ошибки (issue #24)"},
     "check_version": {"type": "string"}
   }
 }

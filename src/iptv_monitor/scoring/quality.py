@@ -59,8 +59,14 @@ def startup_score(results: Sequence[CheckResult]) -> float | None:
 
 
 def media_score(results: Sequence[CheckResult]) -> float | None:
-    """Оценка медиапараметров по максимальному известному разрешению."""
+    """Оценка медиапараметров по максимальному известному разрешению.
+
+    Приоритет у измеренного ffprobe; при выключенном ffprobe используется
+    заявленная высота из RESOLUTION master-плейлиста (issue #24).
+    """
     heights = [r.height for r in results if r.is_success() and r.height]
+    if not heights:
+        heights = [r.declared_height for r in results if r.is_success() and r.declared_height]
     if not heights:
         return None
     best = max(heights)
@@ -82,8 +88,13 @@ def hls_correctness_score(results: Sequence[CheckResult]) -> float | None:
 
 
 def best_height(results: Sequence[CheckResult]) -> int | None:
-    """Максимальное известное разрешение потока (для профилей качества)."""
-    heights = [r.height for r in results if r.height]
+    """Максимальное известное разрешение потока (для профилей качества).
+
+    Измеренное ffprobe имеет приоритет; заявленное из master-плейлиста
+    (RESOLUTION выбранного варианта, issue #24) — fallback, чтобы профиль
+    ru_hd работал без включённого ffprobe.
+    """
+    heights = [h for r in results for h in (r.height, r.declared_height) if h]
     return max(heights) if heights else None
 
 

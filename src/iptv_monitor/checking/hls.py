@@ -27,8 +27,53 @@ class HlsOutcome:
     media_url: str | None = None
     first_segment_ok: bool | None = None
     segment_url: str | None = None
+    # Заявленные параметры выбранного варианта (issue #24): заполняются
+    # из master-плейлиста и работают без ffprobe.
+    declared_height: int | None = None
+    declared_bandwidth: int | None = None
     error_code: CheckErrorCode | None = None
     error_message: str | None = None
+
+
+def parse_variant_height(resolution: str | None) -> int | None:
+    """Высота из RESOLUTION '1280x720' -> 720 (issue #24)."""
+    if not resolution or "x" not in resolution:
+        return None
+    try:
+        return int(resolution.rsplit("x", 1)[1])
+    except ValueError:
+        return None
+
+
+def select_variant(variants: list[HlsVariant]) -> HlsVariant:
+    """Выбрать вариант проверки: минимальный bandwidth (issue #24).
+
+    Низкий bitrate с наибольшей вероятностью отдаёт playable-поток и
+    подтверждает работоспособность; раньше брался variants[0] вслепую.
+    """
+    return min(variants, key=lambda v: v.bandwidth if v.bandwidth is not None else 0)
+
+
+def looks_like_media_bytes(body: bytes) -> bool:
+    """Похоже ли начало сегмента на медиаданные (issue #24).
+
+    MPEG-TS (0x47), fMP4 ('ftyp'), ADTS AAC (0xFF 0xF1/0xF9), MP3 (ID3 /
+    0xFF 0xFB), WebM (EBML). Отсекает HTML-страницы ошибок с кодом 200 и
+    мусор от серверов, игнорирующих Range.
+    """
+    if len(body) < 4:
+        return False
+    if body[0] == 0x47:  # MPEG-TS
+        return True
+    if body[4:8] == b"ftyp" or body.startswith(b"ftyp"):  # fMP4/MP4
+        return True
+    if body[:2] == b"\xff\xf1" or body[:2] == b"\xff\xf9":  # ADTS AAC
+        return True
+    if body[:3] == b"ID3" or body[:2] == b"\xff\xfb":  # MP3
+        return True
+    if body.startswith(b"\x1aE\xdf\xa3"):  # EBML (WebM/Matroska)
+        return True
+    return False
 
 
 def parse_master_playlist(text: str, base_url: str) -> list[HlsVariant]:
@@ -134,8 +179,24 @@ async def probe_dvr(
         if response.error_code or response.status >= 400:
             continue
         text = response.body.decode("utf-8", errors="replace")
-        if looks_like_playlist(text) and parse_media_playlist(text, response.final_url or url):
-            return DvrOutcome(ok=True, hours=hours_ago)
+        if not (
+            looks_like_playlist(text) and parse_media_playlist(text, response.final_url or url)
+        ):
+            continue
+        # Честность пробы (issue #24): серверы, игнорирующие utc, отдают
+        # live-окно — сравниваем с плейлистом без utc; совпал — архива нет.
+        live = await fetch(
+            client,
+            media_url,
+            max_bytes=max_bytes,
+            max_redirects=max_redirects,
+            extra_headers=extra_headers,
+        )
+        if not live.error_code and live.status < 400:
+            live_text = live.body.decode("utf-8", errors="replace")
+            if live_text.strip() == text.strip():
+                return DvrOutcome(ok=False)
+        return DvrOutcome(ok=True, hours=hours_ago)
     return DvrOutcome(ok=False)
 
 
@@ -189,7 +250,12 @@ async def check_hls(
             outcome.error_code = CheckErrorCode.HLS_VARIANT_UNAVAILABLE
             outcome.error_message = "master playlist has no variants"
             return outcome
-        media_url = outcome.variants[0].uri
+        # Выбор варианта и заявленные параметры (issue #24): минимальный
+        # bandwidth, высота из RESOLUTION — без ffprobe.
+        variant = select_variant(outcome.variants)
+        outcome.declared_bandwidth = variant.bandwidth
+        outcome.declared_height = parse_variant_height(variant.resolution)
+        media_url = variant.uri
     else:
         media_url = base
 
@@ -224,7 +290,10 @@ async def check_hls(
 
     segments = parse_media_playlist(media_text, media_base)
     if not segments:
-        # Плейлист валиден, но сегментов нет (например, VOD закончился).
+        # Валидный плейлист без сегментов (EVENT только начался, VOD
+        # закончился) — не успех HLS: смотреть нечего (issue #24).
+        outcome.error_code = CheckErrorCode.PLAYLIST_EMPTY
+        outcome.error_message = "playlist has no segments"
         return outcome
 
     segment_url = segments[0]
@@ -245,6 +314,13 @@ async def check_hls(
     if segment_response.status >= 400:
         outcome.error_code = CheckErrorCode.SEGMENT_ERROR
         outcome.error_message = f"http {segment_response.status} for first segment"
+        return outcome
+
+    # Sniffing начала сегмента (issue #24): сервер, игнорирующий Range,
+    # может отдать HTML-страницу с 200 — по magic bytes отсекаем мусор.
+    if not looks_like_media_bytes(segment_response.body):
+        outcome.error_code = CheckErrorCode.SEGMENT_ERROR
+        outcome.error_message = "segment is not media data"
         return outcome
 
     outcome.first_segment_ok = True

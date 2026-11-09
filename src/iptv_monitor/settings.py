@@ -61,6 +61,10 @@ class CheckSettings(BaseModel):
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     )
+    # Повтор транзиентных ошибок уровня HTTP (issue #24): timeout и
+    # transport_error получают одну повторную попытку — разовый сбой
+    # сети не считается провалом в истории.
+    retry_transient: bool = True
     # DVR-проба Flussonic (issue #10): catchup-атрибуты в плейлисте.
     # dvr_probe_scope: «approved» — только подтверждённые потоки
     # (два запроса на поток лишь для ~100 штук), «all» — все прошедшие HLS.

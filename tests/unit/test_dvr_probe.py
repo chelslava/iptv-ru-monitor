@@ -41,10 +41,12 @@ def test_flussonic_catchup_source_template() -> None:
 
 @pytest.mark.asyncio
 async def test_probe_dvr_utc_query_success() -> None:
-    """Первый вариант (?utc=) отвечает валидным плейлистом — один запрос."""
+    """?utc= отвечает отличным от live плейлистом — архив подтверждён."""
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        assert "utc=" in str(request.url)
+        # live-плейлист (без utc) сравнивается с utc-плейлистом (issue #24)
+        if "utc=" in str(request.url):
+            return httpx.Response(200, text=MEDIA.replace("1699-06000.ts", "1699-00000.ts"))
         return httpx.Response(200, text=MEDIA)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -60,12 +62,12 @@ async def test_probe_dvr_falls_back_to_timeshift() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         seen.append(str(request.url))
         if "timeshift_abs-" in str(request.url):
-            return httpx.Response(200, text=MEDIA)
+            return httpx.Response(200, text=MEDIA.replace("seg0.ts", "old-seg0.ts"))
         return httpx.Response(404)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         outcome = await probe_dvr("http://h.tv/stream/playlist.m3u8", client)
-    assert len(seen) == 2  # не более двух запросов
+    assert len(seen) == 3  # utc 404 + timeshift + live-сравнение (issue #24)
     assert outcome.ok and outcome.hours == 1
 
 

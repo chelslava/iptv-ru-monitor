@@ -82,6 +82,7 @@ class CheckErrorCode(StrEnum):
     INVALID_CONTENT = "invalid_content"
     HLS_INVALID = "hls_invalid"
     HLS_VARIANT_UNAVAILABLE = "hls_variant_unavailable"
+    PLAYLIST_EMPTY = "playlist_empty"  # валидный плейлист без сегментов (issue #24)
     SEGMENT_ERROR = "segment_error"
     FFPROBE_UNAVAILABLE = "ffprobe_unavailable"
     FFPROBE_TIMEOUT = "ffprobe_timeout"

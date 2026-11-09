@@ -31,6 +31,10 @@ check:
   # TiviMate задаёт UA настройкой плейлиста — рекомендация в README.
   ua_fallback: true
   browser_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+  # Повтор транзиентных ошибок уровня HTTP (issue #24): timeout и
+  # transport_error — одна повторная попытка, чтобы разовый сбой сети
+  # не считался провалом в uptime-статистике.
+  retry_transient: true
   # DVR-проба Flussonic (issue #10): включена в безопасном скоупе —
   # только для approved-потоков (~100 шт., по 2 запроса после успешного
   # базового чека). Собирает dvr/dvr_hours в историю; при накоплении

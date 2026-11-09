@@ -99,6 +99,22 @@ async def check_stream(
 
     code, message = classify_http(http_result)
     if (
+        code in (CheckErrorCode.TIMEOUT, CheckErrorCode.TRANSPORT_ERROR)
+        and settings.check.retry_transient
+    ):
+        # Транзиентная ошибка (issue #24): одна попытка повтора — разовый
+        # сбой сети не портит uptime-статистику и не деградирует lifecycle.
+        retry = await fetch(
+            client,
+            stream.url,
+            max_bytes=settings.check.head_bytes,
+            max_redirects=settings.check.max_redirects,
+        )
+        code, message = classify_http(retry)
+        result.retried = True
+        http_result = retry
+
+    if (
         code == CheckErrorCode.HTTP_4XX
         and http_result.status in _UA_BLOCK_STATUSES
         and settings.check.ua_fallback
@@ -144,6 +160,8 @@ async def check_stream(
         )
         result.playlist_ok = hls.playlist_ok
         result.first_segment_ok = hls.first_segment_ok
+        result.declared_height = hls.declared_height
+        result.declared_bandwidth = hls.declared_bandwidth
         if hls.error_code is not None:
             result.error_code = hls.error_code
             result.error_message = redact_text(hls.error_message or "")

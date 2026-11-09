@@ -55,6 +55,16 @@ class CheckResult(BaseModel):
     # проверка прошла после повтора с ним (check.ua_fallback).
     ua_required: bool = False
 
+    # Из master-плейлиста (issue #24): заявленные параметры выбранного
+    # варианта HLS. Работают и без ffprobe — fallback для media_score
+    # и профилей качества (ru_hd).
+    declared_height: int | None = None
+    declared_bandwidth: int | None = None
+
+    # Повтор транзиентной ошибки (issue #24): первая попытка упала по
+    # timeout/transport_error, проверка выполнена повторно.
+    retried: bool = False
+
     check_version: str = __version__
 
     def is_success(self) -> bool:

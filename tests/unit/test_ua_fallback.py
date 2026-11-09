@@ -26,10 +26,16 @@ def _stream() -> Stream:
     )
 
 
+MEDIA = "#EXTM3U\n#EXTINF:6.0,\nseg0.ts\n"
+TS = b"\x47" + b"\x00" * 187
+
+
 def _handler_blocker(request: httpx.Request) -> httpx.Response:
     if request.headers.get("user-agent") == BROWSER_UA:
+        if request.url.path.endswith(".ts"):
+            return httpx.Response(200, content=TS)
         return httpx.Response(
-            200, headers={"content-type": "application/vnd.apple.mpegurl"}, content=b"#EXTM3U\n"
+            200, headers={"content-type": "application/vnd.apple.mpegurl"}, content=MEDIA.encode()
         )
     return httpx.Response(403, text="forbidden")
 
@@ -75,7 +81,13 @@ async def test_success_without_403_no_fallback() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls["n"] += 1
-        return httpx.Response(200, content=b"#EXTM3U\n")  # не важен — HTTP-уровень пройдёт
+        if request.url.path.endswith(".ts"):
+            return httpx.Response(200, content=b"\x47" + b"\x00" * 187)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/vnd.apple.mpegurl"},
+            content=b"#EXTM3U\n#EXTINF:6.0,\nseg0.ts\n",
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         settings = AppSettings()
