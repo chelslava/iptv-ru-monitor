@@ -3,8 +3,10 @@
 #
 # Что делает:
 #   1) обновляет репозиторий и каталог источников;
-#   2) проверяет потоки (по умолчанию http,hls, первые IPTV_LIMIT штук)
-#      с честной меткой probe_location=home-ru;
+#   2) проверяет потоки (по умолчанию http,hls) с честной меткой
+#      probe_location=home-ru; каталог ротируется по суткам (issue #17):
+#      IPTV_ROTATE_PARTS ночей на полный круг, IPTV_LIMIT ограничивает
+#      объём прогона (раньше проверялась только «голова» каталога);
 #   3) публикует результаты отдельным файлом в ветку probe/ru
 #      (build-playlists.yml забирает их оттуда и сливает в общую историю).
 #
@@ -22,6 +24,13 @@ export PATH="$HOME/.local/bin:$PATH"
 
 LEVELS="${IPTV_LEVELS:-http,hls}"
 LIMIT="${IPTV_LIMIT:-300}"
+# Ротация каталога (issue #17): ночной прогон проверяет свой stride-срез
+# каталога, слот = номер суток % число слотов. За IPTV_ROTATE_PARTS ночей
+# каждая точка каталога получает проверку home-ru — раньше проверялась
+# только «голова» каталога (первые N потоков), и вторая точка наблюдения
+# была достижима для 3,4% каталога.
+ROTATE_PARTS="${IPTV_ROTATE_PARTS:-30}"
+ROTATE_SLOT=$(( $(date -u +%s) / 86400 % ROTATE_PARTS ))
 
 # Защита от дублей: пропуск, если прогон был менее 8 часов назад
 # (ежедневный триггер + catch-up по входу в систему могут сработать оба).
@@ -45,10 +54,12 @@ mkdir -p "$(dirname "$RESULT")"
 rm -f "$RESULT"
 
 uv run iptv-monitor discover
-echo "==> [$LABEL] Проверка потоков (уровни: $LEVELS, лимит: $LIMIT)"
+echo "==> [$LABEL] Проверка потоков (уровни: $LEVELS, лимит: $LIMIT, ротация: слот $ROTATE_SLOT из $ROTATE_PARTS)"
 uv run iptv-monitor check \
     --levels "$LEVELS" \
     --limit "$LIMIT" \
+    --rotate-offset "$ROTATE_SLOT" \
+    --rotate-parts "$ROTATE_PARTS" \
     --probe-location "$LABEL" \
     --country RU
 

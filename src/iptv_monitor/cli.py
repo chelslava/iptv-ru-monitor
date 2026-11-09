@@ -16,7 +16,7 @@ import click
 import httpx
 
 from . import __version__
-from .checking import flussonic_catchup_source, parse_levels, run_checks
+from .checking import apply_rotation, flussonic_catchup_source, parse_levels, run_checks
 from .checking.geo import detect_country_code
 from .discovery import create_adapter, fetch_all
 from .domain.channel import Channel
@@ -178,6 +178,8 @@ def run_check(
     stream_id: str | None = None,
     probe_location: str | None = None,
     country_code: str | None = None,
+    rotate_offset: int | None = None,
+    rotate_parts: int | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> list[CheckResult]:
     """Проверить потоки и записать историю в хранилище."""
@@ -187,6 +189,13 @@ def run_check(
         if not streams:
             raise click.ClickException(f"stream not found: {stream_id}")
     streams = [s for s in streams if s.enabled]
+    if rotate_parts is not None and rotate_parts > 1 and stream_id is None:
+        # Ротация каталога (issues #16, #17): срез до лимита — лимит лишь
+        # ограничивает объём работы внутри уже выбранного среза.
+        try:
+            streams = apply_rotation(streams, rotate_offset or 0, rotate_parts)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
     if limit:
         streams = streams[:limit]
     if not streams:
@@ -828,6 +837,18 @@ def discover(settings: AppSettings) -> None:
 @click.option("--stream-id", default=None, help="Проверить один поток")
 @click.option("--probe-location", default=None, help="Метка точки наблюдения")
 @click.option("--country", "country_code", default=None, help="Страна точки наблюдения (ISO)")
+@click.option(
+    "--rotate-offset",
+    type=int,
+    default=None,
+    help="Слот ротации каталога (0 <= offset < rotate-parts); с --stream-id игнорируется",
+)
+@click.option(
+    "--rotate-parts",
+    type=int,
+    default=None,
+    help="Число слотов ротации; >= 2 включает stride-срез каталога (issues #16/#17)",
+)
 @click.pass_obj
 def check(
     settings: AppSettings,
@@ -836,6 +857,8 @@ def check(
     stream_id: str | None,
     probe_location: str | None,
     country_code: str | None,
+    rotate_offset: int | None,
+    rotate_parts: int | None,
 ) -> None:
     """Проверить потоки и записать историю."""
     run_check(
@@ -845,6 +868,8 @@ def check(
         stream_id=stream_id,
         probe_location=probe_location,
         country_code=country_code,
+        rotate_offset=rotate_offset,
+        rotate_parts=rotate_parts,
     )
 
 

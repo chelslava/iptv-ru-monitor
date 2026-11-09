@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Слияние истории проверок в data/state/checks.jsonl.
-# Источники: артефакты check-global (последние 5 прогонов), артефакт check-ru
-# и файлы ветки probe/ru (домашняя RU-точка).
+# Источники: ветка history/global (постоянная история github-runner, issue #16),
+# артефакт check-ru (последний прогон VDS) и файлы ветки probe/ru
+# (домашняя RU-точка). Пока ветка history/global не создана, используется
+# fallback на артефакты check-global последних 5 прогонов (старое поведение,
+# ~30 часов глубины).
 # Используется build-playlists.yml и approve-candidates.yml.
 # Требует: выполненный checkout, GITHUB_REPOSITORY, GH_TOKEN.
 
@@ -10,21 +13,31 @@ set -euo pipefail
 : "${GITHUB_REPOSITORY:?нужен GITHUB_REPOSITORY}"
 : "${GH_TOKEN:?нужен GH_TOKEN}"
 
-mkdir -p data/state artifacts/global artifacts/ru probe/ru
+mkdir -p data/state artifacts/global artifacts/ru probe/ru history/global
 
-echo "==> Артефакты check-global (последние 5 успешных прогонов)"
-for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
-    --status success --limit 5 --json databaseId -q '.[].databaseId'); do
-  art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
-    --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
-  [[ -z "$art_id" ]] && continue
-  curl -sL -H "Authorization: Bearer $GH_TOKEN" \
-    "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
-    -o /tmp/global.zip
-  # Файл в каждом артефакте один и тот же — свой подкаталог на прогон.
-  unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
-done
-echo "    файлов: $(find artifacts/global -name '*.jsonl' | wc -l)"
+echo "==> Ветка history/global (постоянная история github-runner, issue #16)"
+if git fetch origin "+refs/heads/history/global:refs/remotes/origin/history/global" 2>/dev/null; then
+  git ls-tree --name-only refs/remotes/origin/history/global \
+    | grep -E '^checks-global-[0-9]{8}-[0-9]{4}\.jsonl\.gz$' \
+    | while read -r f; do
+        git show "refs/remotes/origin/history/global:$f" | gzip -d > "history/global/${f%.gz}"
+      done
+  echo "    файлов: $(ls -1 history/global | wc -l)"
+else
+  echo "    ветка не найдена — fallback на артефакты check-global (последние 5 прогонов)"
+  for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
+      --status success --limit 5 --json databaseId -q '.[].databaseId'); do
+    art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+      --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
+    [[ -z "$art_id" ]] && continue
+    curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+      "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
+      -o /tmp/global.zip
+    # Файл в каждом артефакте один и тот же — свой подкаталог на прогон.
+    unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
+  done
+  echo "    файлов: $(find artifacts/global -name '*.jsonl' | wc -l)"
+fi
 
 echo "==> Артефакт check-ru (последний успешный прогон)"
 ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \
@@ -52,6 +65,9 @@ fi
 
 echo "==> Слияние"
 : > data/state/checks.jsonl
+if compgen -G 'history/global/*.jsonl' > /dev/null; then
+  cat history/global/*.jsonl >> data/state/checks.jsonl
+fi
 if compgen -G 'artifacts/global/*/*.jsonl' > /dev/null; then
   cat artifacts/global/*/*.jsonl >> data/state/checks.jsonl
 fi

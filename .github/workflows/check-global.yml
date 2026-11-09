@@ -3,6 +3,14 @@ name: Check global
 # Базовая проверка доступности с GitHub-hosted runner.
 # Результаты маркируются probe_location=github-runner и НЕ считаются
 # российской точкой проверки.
+#
+# Ротация каталога (issue #16): каждый 6-часовой прогон проверяет свою
+# долю каталога (stride-срез `--rotate-offset/--rotate-parts`, PARTS=4);
+# за сутки каждый поток получает одну проверку, весь каталог — четыре.
+# Результаты постоянно накапливаются в ветке history/global (по одному
+# gzip-файлу на прогон, файлы старше 30 дней удаляются при пуше), откуда
+# их забирает scripts/merge_history.sh. Раньше история жила ~30 часов
+# (последние 5 артефактов) — 94% каталога застревало в insufficient_data.
 
 on:
   workflow_dispatch:
@@ -12,11 +20,16 @@ on:
         default: "http,hls"
         required: false
         type: string
+      parts:
+        description: "Слотов ротации (1 = весь каталог без ротации)"
+        default: "4"
+        required: false
+        type: string
   schedule:
     - cron: "0 */6 * * *" # каждые 6 часов (время не гарантировано)
 
 permissions:
-  contents: read
+  contents: write # пуш истории в ветку history/global (issue #16)
   issues: write # метка ci-failing на roadmap при падении (issue #11)
 
 concurrency:
@@ -27,6 +40,8 @@ jobs:
   check:
     name: HTTP/HLS check from GitHub runner
     runs-on: ubuntu-latest
+    env:
+      ROTATE_PARTS: ${{ inputs.parts || '4' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,13 +52,24 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Compute rotation slot
+        # Детерминированный слот от времени: каждый 6-часовой интервал
+        # проверяет свою долю каталога (10xx из 4 частей в сутки).
+        run: echo "ROTATE_SLOT=$(( $(date -u +%s) / 21600 % ${ROTATE_PARTS} ))" >> "$GITHUB_ENV"
+
       - name: Refresh catalog
         run: uv run iptv-monitor discover
         env:
           IPTV_PROBE_LOCATION: github-runner
 
       - name: Check streams
-        run: uv run iptv-monitor check --levels ${{ inputs.levels || 'http,hls' }} --probe-location github-runner
+        run: |
+          FLAGS=""
+          if [[ "$ROTATE_PARTS" -ge 2 ]]; then
+            FLAGS="--rotate-offset $ROTATE_SLOT --rotate-parts $ROTATE_PARTS"
+          fi
+          uv run iptv-monitor check --levels ${{ inputs.levels || 'http,hls' }} \
+            --probe-location github-runner $FLAGS
         env:
           IPTV_JSONL_PATH: data/state/checks-global.jsonl
 
@@ -53,6 +79,7 @@ jobs:
           f=data/state/checks-global.jsonl
           {
             echo "## Check global"
+            echo "Ротация: слот **$ROTATE_SLOT** из **$ROTATE_PARTS**"
             if [[ -f "$f" ]]; then
               total=$(wc -l < "$f")
               ok=$(grep -c '"error_code":null' "$f" || true)
@@ -73,6 +100,47 @@ jobs:
           path: data/state/checks-global.jsonl
           retention-days: 30
           if-no-files-found: error
+
+      - name: Persist history (branch history/global)
+        # Постоянная история github-runner (issue #16): один gzip-файл
+        # на прогон; merge_history.sh собирает всё окно retention.
+        if: always()
+        env:
+          BRANCH: history/global
+        run: |
+          F=data/state/checks-global.jsonl
+          if [[ ! -s "$F" ]]; then
+            echo "Результатов нет — пуш истории пропущен"
+            exit 0
+          fi
+          STAMP=$(date -u +%Y%m%d-%H%M)
+          git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null || true
+          WORKTREE=$(mktemp -d)
+          cleanup() { git worktree remove --force "$WORKTREE" 2>/dev/null || true; git worktree prune; }
+          trap cleanup EXIT
+          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+            git worktree add -B "$BRANCH" "$WORKTREE" "origin/$BRANCH"
+          else
+            git worktree add --orphan -b "$BRANCH" "$WORKTREE"
+          fi
+          gzip -c "$F" > "$WORKTREE/checks-global-$STAMP.jsonl.gz"
+          # Ретенция в ветке: удаляем файлы старше 30 дней по дате в имени.
+          CUTOFF=$(date -u -d "30 days ago" +%Y%m%d)
+          cd "$WORKTREE"
+          for f in checks-global-*.jsonl.gz; do
+            [[ -e "$f" ]] || continue
+            d=$(sed -E 's/checks-global-([0-9]{8})-.*/\1/' <<<"$f")
+            if (( d < CUTOFF )); then git rm -q "$f"; fi
+          done
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Нет изменений в истории — пуш пропущен"
+          else
+            git config user.name "iptv-ru-monitor bot"
+            git config user.email "bot@users.noreply.github.com"
+            git commit -m "history: github-runner $STAMP (slot $ROTATE_SLOT/$ROTATE_PARTS)"
+            git push origin "$BRANCH"
+          fi
 
       - name: Mark roadmap failing
         if: failure()

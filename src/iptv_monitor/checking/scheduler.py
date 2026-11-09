@@ -50,6 +50,21 @@ def _hls_expected(stream: Stream, content_type: str) -> bool:
     return stream.url.lower().split("?")[0].endswith((".m3u8", ".m3u"))
 
 
+def apply_rotation(streams: Sequence[Stream], offset: int, parts: int) -> list[Stream]:
+    """Детерминированный stride-срез каталога для ротации проверок.
+
+    Поток с индексом i попадает в срез при ``i % parts == offset``: за parts
+    прогонов (offsets 0..parts-1) каталог покрывается ровно один раз, а каждый
+    прогон равномерно представляет все источники, в отличие от contiguous-среза
+    (issues #16, #17). Воспроизводимость: те же offset+parts — тот же срез.
+    """
+    if parts < 2:
+        raise ValueError("rotate_parts must be >= 2")
+    if not 0 <= offset < parts:
+        raise ValueError(f"rotate_offset must be in [0, {parts})")
+    return list(streams[offset::parts])
+
+
 async def check_stream(
     stream: Stream,
     client: httpx.AsyncClient,

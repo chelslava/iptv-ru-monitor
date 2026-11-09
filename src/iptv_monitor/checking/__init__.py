@@ -12,7 +12,14 @@ from .hls import (
     probe_dvr,
 )
 from .http import check_http, classify_http
-from .scheduler import DEFAULT_LEVELS, LEVELS, check_stream, parse_levels, run_checks
+from .scheduler import (
+    DEFAULT_LEVELS,
+    LEVELS,
+    apply_rotation,
+    check_stream,
+    parse_levels,
+    run_checks,
+)
 
 __all__ = [
     "DEFAULT_LEVELS",
@@ -20,6 +27,7 @@ __all__ = [
     "HlsOutcome",
     "HlsVariant",
     "LEVELS",
+    "apply_rotation",
     "check_hls",
     "check_http",
     "check_stream",

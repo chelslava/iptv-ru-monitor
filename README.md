@@ -84,11 +84,12 @@ IPTV_LIMIT=20 IPTV_LEVELS=http,hls,ffprobe bash scripts/run_vds_check_local.sh
 ```
 
 Постоянная RU-точка — ночной прогон с резидентного IP (метка `home-ru`,
-300 потоков, публикация результатов в ветку `probe/ru`):
+~300 потоков с ротацией по каталогу — полный круг за ~30 ночей, публикация
+результатов в ветку `probe/ru`):
 
 ```bash
 bash scripts/ru_probe_push.sh           # вручную; либо по расписанию
-IPTV_LIMIT=500 bash scripts/ru_probe_push.sh
+IPTV_LIMIT=500 IPTV_ROTATE_PARTS=15 bash scripts/ru_probe_push.sh
 ```
 
 Результаты подключаются к сборке так же, как артефакт реального VDS.

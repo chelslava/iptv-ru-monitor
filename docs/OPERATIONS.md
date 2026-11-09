@@ -47,12 +47,15 @@ Scheduled workflow может запускаться с задержкой — �
 (резидентный RU IP, метка `home-ru`):
 
 - `scripts/ru_probe_push.sh` — обновляет каталог, проверяет потоки
-  (`IPTV_LIMIT`, по умолчанию 300; `IPTV_LEVELS`, по умолчанию `http,hls`)
-  и публикует результаты в ветку `probe/ru` (хранятся последние 30 файлов).
+  (`IPTV_LIMIT`, по умолчанию 300; `IPTV_LEVELS`, по умолчанию `http,hls`;
+  `IPTV_ROTATE_PARTS`, по умолчанию 30 — ночные срезы ротируются по каталогу,
+  полный круг за ~30 ночей, issue #17) и публикует результаты в ветку
+  `probe/ru` (хранятся последние 30 файлов).
 - `scripts/ru_probe_task.cmd` — обёртка для планировщика Windows;
   задача «iptv-ru-monitor home-ru probe» ежедневно в 03:40 по местному времени.
 - `build-playlists.yml` забирает файлы из `probe/ru` и сливает их в общую
-  историю вместе с артефактами `checks-global`/`checks-ru`.
+  историю вместе с веткой `history/global` (постоянная история github-runner,
+  issue #16) и артефактом `checks-ru`.
 
 Регистрация задачи (однократно, из Git Bash):
 
