@@ -40,32 +40,81 @@
 
 Одна запись — одна проверка одного потока из одной точки наблюдения.
 
-- `stream_id`, `checked_at` (UTC), `probe_location` (`github-runner`,
-  `ru-vds`, `local`, ...), `country_code`;
+- `stream_id`, `checked_at` (UTC), `probe_location`, `country_code`;
 - уровень 1: `http_status`, `dns_ok`, `tls_ok`, `startup_time_ms`;
 - уровень 2: `playlist_ok`, `first_segment_ok`;
 - уровень 3: `video_codec`, `audio_codec`, `width`, `height`, `fps`,
   `bitrate_bps`, `duration_checked_seconds`;
+- DVR/catchup (issue #10, при `check.dvr_probe=true`): `dvr`,
+  `dvr_hours` — подтверждённая глубина архива Flussonic;
 - `error_code` / `error_message` (секреты отредактированы), `check_version`.
 
 Успешной считается проверка без `error_code` (`is_success`). Один успешный
 HTTP-ответ не доказывает стабильность — рейтинг строится по истории.
 
+### Точки наблюдения (`probe_location`)
+
+| Метка | Кто проверяет | Каденс | Транспорт результатов |
+|-------|---------------|--------|----------------------|
+| `github-runner` | CI (check-global) | каждые 6 ч | артефакт `checks-global` (30 дней) |
+| `ru-vds` | VDS по SSH (check-ru) | ежедневно | артефакт `checks-ru` (30 дней); без секретов — пропуск |
+| `home-ru` | домашний ПК (ночной прогон) | ежедневно ночью | файлы `checks-home-ru-<штамп>.jsonl` в ветке `probe/ru` (последние 30) |
+
+`probe/ru` — транспортная ветка-шина: домашний ПК публикует JSONL-файлы
+коммитами (`scripts/ru_probe_push.sh`, guard 8 ч + `IPTV_FORCE=1`),
+CI забирает их при сборке (`scripts/merge_history.sh`). Ветка не влияет
+на main и служит только переносом данных.
+
+Кандидаты на подтверждение требуют успеха минимум из **двух** точек
+(`config/quality_profiles.yaml -> approval.min_probe_locations`), поэтому
+`home-ru` — обязательный участник воронки публикаций.
+
 ## EPG-сопоставление (`data/state/epg_matches.json`)
 
-Сохраняются исходный ID/название, выбранный `tvg_id`, способ сопоставления
-(`tvg_id` / `alias` / `normalized_name` / `manual`), уверенность, источник и
-признак ручного подтверждения. Нечёткое совпадение не перезаписывает ручное.
+Сохраняются исходный ID/название, выбранный `tvg_id`, способ сопоставления,
+уверенность, источник и признак ручного подтверждения. Нечёткое совпадение
+не перезаписывает ручное. Способы (в порядке приоритета):
+
+| Метод | Как работает |
+|-------|--------------|
+| `tvg_id` | точное совпадение id канала с id EPG-источника |
+| `alias` | ручной алиас из `config/countries/*.yaml` (только если его tvg_id есть в активном EPG) |
+| `normalized_name` | нормализованное имя канала = display-name EPG |
+| `bridge` | id формата iptv-org раскрыт через iptv-org/database (Unlicense) в каноническое имя + `alt_names` (вкл. русские), затем как имя (issue #5) |
+
+## Жизненный цикл потока (issue #8)
+
+По истории проверок от самой свежей до первого успеха считается счётчик
+провалов подряд (`history/lifecycle.py`):
+
+| Провалов подряд | Состояние | Эффект |
+|---|---|---|
+| < `stale_consecutive_failures` (6) | живой | публикуется |
+| ≥ 6 | `stale` | публикуется, помечается в `report.json` |
+| ≥ `deny_consecutive_failures` (12) | `auto-denied` | исключается из плейлиста (approved-запись не удаляется) |
+
+Один успех сбрасывает счётчик — поток реанимируется автоматически.
 
 ## Файлы состояния (`data/state/`)
 
 | Файл | Содержимое |
 |------|-----------|
 | `channels.json` / `streams.json` | Нормализованный каталог после discovery |
-| `checks.jsonl` / `history.sqlite` | История проверок |
+| `checks.jsonl` / `history.sqlite` | История проверок (окно = `retention.history_days`, 30 дней) |
 | `scores.json` | Рейтинги потоков |
 | `epg_matches.json`, `epg_programmes.json` | Результаты enrichment |
-| `approved_streams.yaml` | Подтверждённые к публикации stream_id (для источников с `public_policy: review`) |
+| `candidates.json` | Кандидаты на подтверждение последнего прогона (`iptv-monitor candidates`) |
+| `approved_streams.yaml` | Подтверждённые stream_id для источников с `public_policy: review`. **Единственный state-файл, который трекается в git**: он переносит решения человека из PR кандидатов в CI-сборку |
+
+### candidates.json
+
+Результат `iptv-monitor candidates --country RU` (workflow approve-candidates,
+ежедневно в 09:30 UTC): список потоков, заблокированных ТОЛЬКО причиной
+review, с score ≥ 75, ≥ 6 проверками, успехом из ≥ 2 точек и полученным
+HLS-сегментом. `--apply` дописывает `stream_ids` в `approved_streams.yaml`;
+изменение коммитится в ветку `chore/approval-candidates` и открывается
+автоматическим PR — **merge PR = подтверждение** (техническое состояние +
+чек-лист прав источника из docs/SOURCE_POLICY.md).
 
 ## Классификация ошибок
 

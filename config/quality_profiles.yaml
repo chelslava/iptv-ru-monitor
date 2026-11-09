@@ -37,6 +37,12 @@ profiles:
     min_score: 75
     min_checks: 8
     categories: [sports]
+  # Второй страновой профиль (issue #12): добавление страны = файл
+  # config/countries/<cc>.yaml + профиль здесь, без правок кода.
+  uz_default:
+    country: UZ
+    min_score: 50
+    min_checks: 5
 
 # Кандидаты на подтверждение публикации (iptv-monitor candidates и workflow
 # approve-candidates). Поток становится кандидатом, если набрал рейтинг,

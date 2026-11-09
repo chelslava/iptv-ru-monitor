@@ -30,8 +30,19 @@ def test_country_from_name() -> None:
     assert country_from_name("Канал (KZ)") == "KZ"
     assert country_from_name("Первый канал") is None
     assert country_from_name("Матч ТВ") is None
-    assert country_from_name("US Open") == "US"
+    # «US Open» — турнир, а не страна (issue #15)
+    assert country_from_name("US Open (1080p)") is None
+    assert country_from_name("EU Cup", group_title=None) is None
+    assert country_from_name("US Weekly") is None
     assert country_from_name(None) is None
+
+
+def test_country_group_beats_name() -> None:
+    """Группа надёжнее имени при конфликте кодов (issue #15)."""
+    assert country_from_name("News US", group_title="Общество") == "US"
+    assert country_from_name("News US", group_title="Regional DE") == "DE"
+    # событие в имени, страна в группе — группа побеждает
+    assert country_from_name("US Open Tennis", group_title="Sports RU") == "RU"
 
 
 def test_detect_country_priority() -> None:

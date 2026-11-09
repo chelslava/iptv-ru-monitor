@@ -33,7 +33,10 @@ storage:
   sqlite_path: data/state/history.sqlite
 
 retention:
-  history_days: 90
+  # Фактическое окно истории = 30 дней: артефакты проверок живут 30 дней,
+  # файлы probe/ru — последние 30 ночей (issue #13). Раньше конфиг обещал
+  # 90, реальность давала ~30 — теперь docs и факты совпадают.
+  history_days: 30
   max_results_per_stream: 200
 
 lifecycle:

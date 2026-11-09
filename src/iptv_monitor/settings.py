@@ -63,7 +63,7 @@ class StorageSettings(BaseModel):
 
 
 class RetentionSettings(BaseModel):
-    history_days: int = 90
+    history_days: int = 30  # окно артефактов проверок и probe/ru (issue #13)
     max_results_per_stream: int = 200
 
 

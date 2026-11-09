@@ -37,6 +37,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Retention
+        # Привести историю к configured-окну (issue #13): 30 дней / 200 на поток.
+        run: uv run iptv-monitor retention
+
       - name: "Guard: home-ru freshness"
         # Ранний сигнал «ночной домашний прогон перестал приходить» (issue #11):
         # сборка краснеет, если данных home-ru нет дольше 36 часов.
