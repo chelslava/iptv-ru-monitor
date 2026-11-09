@@ -21,7 +21,7 @@ _KNOWN_CC = frozenset(
     LT LV EE FI SE NO DK PL DE FR IT ES NL BE AT CH CZ SK HU RO BG GR
     TR IL AE SA IR IQ IN CN JP KR
     US CA MX BR AR CL CO AU NZ ZA EG
-    UK
+    UK GB
     """.split()
 )
 
@@ -38,13 +38,23 @@ _EVENT_WORDS = frozenset(
 # обнаружения ложных срабатываний в отчёте discover.
 _BRAND_NAMES = frozenset({"us open", "uk open", "us weekly", "uk top"})
 
+# Не-ISO синонимы, встречающиеся в источниках, -> ISO 3166-1 alpha-2
+# (issue #26): «UK» из tvg-id/названий даёт нестандартный код страны
+# и channel_id «uk-...»; канон — GB.
+_CC_ALIASES = {"UK": "GB"}
+
+
+def _canonical_cc(code: str) -> str:
+    """Канонический ISO-код: синонимы источников приводятся к ISO."""
+    return _CC_ALIASES.get(code, code)
+
 
 def normalize_country(code: str | None) -> str | None:
     """Вернуть код страны в верхнем регистре либо None, если код невалиден."""
     if not code:
         return None
     code = code.strip().upper()
-    return code if _COUNTRY_RE.match(code) else None
+    return _canonical_cc(code) if _COUNTRY_RE.match(code) else None
 
 
 def country_from_tvg_id(tvg_id: str | None) -> str | None:
@@ -58,7 +68,7 @@ def country_from_tvg_id(tvg_id: str | None) -> str | None:
     suffix = parts[-1]
     if len(suffix) == 2 and suffix.isalpha():
         cc = suffix.upper()
-        return cc if cc in _KNOWN_CC else None
+        return _canonical_cc(cc) if cc in _KNOWN_CC else None
     return None
 
 
@@ -78,7 +88,7 @@ def _clean_name_hits(text: str) -> str | None:
         phrase = " ".join(words[max(0, word_index - 1) : word_index + 2]).lower()
         if phrase in _BRAND_NAMES:
             continue
-        return cc
+        return _canonical_cc(cc)
     return None
 
 

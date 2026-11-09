@@ -153,6 +153,7 @@ async def probe_dvr(
     max_redirects: int = 5,
     hours_ago: int = 1,
     extra_headers: dict[str, str] | None = None,
+    timeout_seconds: float | None = None,
 ) -> DvrOutcome:
     """DVR-проба Flussonic: не более двух запросов после успешного базового чека.
 
@@ -175,6 +176,7 @@ async def probe_dvr(
             max_bytes=max_bytes,
             max_redirects=max_redirects,
             extra_headers=extra_headers,
+            timeout_seconds=timeout_seconds,
         )
         if response.error_code or response.status >= 400:
             continue
@@ -191,6 +193,7 @@ async def probe_dvr(
             max_bytes=max_bytes,
             max_redirects=max_redirects,
             extra_headers=extra_headers,
+            timeout_seconds=timeout_seconds,
         )
         if not live.error_code and live.status < 400:
             live_text = live.body.decode("utf-8", errors="replace")
@@ -208,13 +211,17 @@ async def check_hls(
     segment_max_bytes: int = 65536,
     max_redirects: int = 5,
     extra_headers: dict[str, str] | None = None,
+    timeout_seconds: float | None = None,
+    segment_timeout_seconds: float | None = None,
 ) -> HlsOutcome:
     """Проверить HLS: playlist, варианты качества, первый сегмент.
 
     Ошибки и истечение токенов проявляются на этапе сегмента — поэтому
     получение сегмента обязательно для подтверждения работоспособности.
     ``extra_headers`` (например, браузерный User-Agent, issue #18)
-    применяются ко всем запросам уровня.
+    применяются ко всем запросам уровня. ``timeout_seconds`` /
+    ``segment_timeout_seconds`` — тайм-ауты плейлистов и сегментов
+    (check.hls_timeout_seconds / check.segment_timeout_seconds, issue #26).
     """
     outcome = HlsOutcome()
 
@@ -224,6 +231,7 @@ async def check_hls(
         max_bytes=max_bytes,
         max_redirects=max_redirects,
         extra_headers=extra_headers,
+        timeout_seconds=timeout_seconds,
     )
     if response.error_code:
         outcome.error_code = response.error_code
@@ -266,6 +274,7 @@ async def check_hls(
         max_bytes=max_bytes,
         max_redirects=max_redirects,
         extra_headers=extra_headers,
+        timeout_seconds=timeout_seconds,
     )
     if media_response.error_code:
         outcome.error_code = media_response.error_code
@@ -306,6 +315,7 @@ async def check_hls(
         max_bytes=segment_max_bytes,
         max_redirects=max_redirects,
         extra_headers=segment_headers,
+        timeout_seconds=segment_timeout_seconds or timeout_seconds,
     )
     if segment_response.error_code:
         outcome.error_code = segment_response.error_code

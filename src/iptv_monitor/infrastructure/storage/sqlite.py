@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from ...domain.check_result import CheckResult
+from ...domain.check_result import CheckResult, now_utc
 from .base import CheckStorage
 
 _SCHEMA = """
@@ -77,6 +77,33 @@ class SqliteStorage(CheckStorage):
         if limit is not None:
             results.reverse()  # хронологический порядок
         return results
+
+    def prune(self, *, history_days: int, max_results_per_stream: int) -> int:
+        """Удалить старые записи и сверх лимита на поток. Возвращает число удалённых.
+
+        Оба лимита применяются (issue #26): раньше SQLite-путь игнорировал
+        max_results_per_stream — история на VDS росла без ограничения.
+        """
+        cutoff = (now_utc() - timedelta(days=history_days)).isoformat()
+        dropped = 0
+        with self._conn:
+            cursor = self._conn.execute("DELETE FROM check_results WHERE checked_at < ?", (cutoff,))
+            dropped += cursor.rowcount or 0
+            cursor = self._conn.execute(
+                """
+                DELETE FROM check_results WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY stream_id ORDER BY checked_at DESC, id DESC
+                        ) AS rn
+                        FROM check_results
+                    ) WHERE rn > ?
+                )
+                """,
+                (max_results_per_stream,),
+            )
+            dropped += cursor.rowcount or 0
+        return dropped
 
     def close(self) -> None:
         self._conn.close()

@@ -61,13 +61,9 @@ def prune_storage(
         return dropped
 
     if isinstance(storage, SqliteStorage):
-        import sqlite3
-
-        cutoff = (now_utc() - timedelta(days=history_days)).isoformat()
-        conn: sqlite3.Connection = storage._conn  # noqa: SLF001 - сервисный доступ
-        with conn:
-            cursor = conn.execute("DELETE FROM check_results WHERE checked_at < ?", (cutoff,))
-            dropped = cursor.rowcount or 0
-        return dropped
+        return storage.prune(
+            history_days=history_days,
+            max_results_per_stream=max_results_per_stream,
+        )
 
     raise TypeError(f"unsupported storage type: {type(storage).__name__}")

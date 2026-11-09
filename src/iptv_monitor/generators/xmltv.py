@@ -47,10 +47,19 @@ def render_xmltv(
         programme_el = ET.SubElement(root, "programme", attrs)
         title_el = ET.SubElement(programme_el, "title")
         title_el.text = programme.title
+        if programme.sub_title:
+            sub_el = ET.SubElement(programme_el, "sub-title")
+            sub_el.text = programme.sub_title
         if programme.description:
             desc_el = ET.SubElement(programme_el, "desc")
             desc_el.text = programme.description
+        if programme.category:
+            cat_el = ET.SubElement(programme_el, "category")
+            cat_el.text = programme.category
+        if programme.icon:
+            ET.SubElement(programme_el, "icon", {"src": programme.icon})
         included += 1
 
-    ET.SubElement(root, "meta", {"count": str(included)})  # служебная статистика
-    return ET.tostring(root, encoding="unicode", xml_declaration=False)
+    # XMLTV DTD не описывает служебных элементов — счётчик программ виден
+    # в report.json/stats.json, а не в XML (issue #26).
+    return ET.tostring(root, encoding="unicode", xml_declaration=True)

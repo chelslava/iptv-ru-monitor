@@ -592,15 +592,24 @@ def run_candidates(
     if apply_changes and candidates:
         merged = sorted(approved | {c.stream_id for c in candidates})
         path = settings.state_dir / "approved_streams.yaml"
+        # Шапка с ручными комментариями сохраняется (issue #26): берём
+        # комментарии существующего файла, иначе — дефолтная.
+        existing_header: list[str] = []
+        if path.is_file():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("#"):
+                    existing_header.append(line)
+                elif line.strip():
+                    break  # дошли до данных — комментарий закончился
         header = "\n".join(
-            [
+            existing_header
+            or [
                 "# Подтверждённые к публикации stream_id (public_policy: review).",
                 "# Дополняется автоматически кандидатами (iptv-monitor candidates --apply)",
                 "# и вручную; детали — data/state/candidates.json и PR approve-candidates.",
-                "stream_ids:",
-                "",
             ]
         )
+        header += "\nstream_ids:\n\n"
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_text(path, header + "".join(f"  - {sid}\n" for sid in merged))
         click.echo(f"Подтверждено +{len(merged) - len(approved)} (всего {len(merged)})")
@@ -693,7 +702,7 @@ def run_build(
     dist_country.mkdir(parents=True, exist_ok=True)
     written: list[dict[str, object]] = []
     default_selection: list[SelectedStream] = []
-    report: dict[str, object] | None = None
+    default_report: dict[str, object] | None = None
 
     for index, playlist in enumerate(playlists):
         profile_cfg = quality.profile(playlist.profile)
@@ -734,15 +743,21 @@ def run_build(
         )
         if index == 0:
             default_selection = selected
-            report = build_report(
-                country=country,
-                profile_id=playlist.profile,
-                selections=selected,
-                results=history,
-                generated_at=now_utc(),
-                lifecycle=lifecycle,
-            )
-            write_json(dist_country / "report.json", report)
+        # Per-profile отчёты (issue #26): report.json — основной профиль,
+        # report-<profile>.json — остальные; причины включения/исключения
+        # видны для каждого профиля, а не только для дефолтного.
+        profile_report = build_report(
+            country=country,
+            profile_id=playlist.profile,
+            selections=selected,
+            results=history,
+            generated_at=now_utc(),
+            lifecycle=lifecycle,
+        )
+        if index == 0:
+            default_report = profile_report
+        report_name = "report.json" if index == 0 else f"report-{playlist.profile}.json"
+        write_json(dist_country / report_name, profile_report)
         written.append(
             {
                 "title": playlist.title or playlist.filename,
@@ -801,10 +816,10 @@ def run_build(
         f"EPG {epg_playlist_channels}/{stats['playlist']['streams']}"
     )
 
-    # Топ каналов для index.html: по score, uptime — из отчёта.
+    # Топ каналов для index.html: по score, uptime — из отчёта основного профиля.
     report_streams: dict[str, dict[str, Any]] = {}
-    if report is not None:
-        report_data = cast(dict[str, Any], report)
+    if default_report is not None:
+        report_data = cast(dict[str, Any], default_report)
         report_streams = {str(s["stream_id"]): s for s in report_data["streams"]}
     top_channels = []
     for sel in sorted(
@@ -972,11 +987,25 @@ def retention(settings: AppSettings) -> None:
 @click.option("--country", default="RU", help="Страна сборки.")
 @click.pass_obj
 def pipeline(settings: AppSettings, levels: str, country: str) -> None:
-    """Полный цикл: discover → check → enrich → score → build."""
+    """Полный цикл: discover → check → enrich → score → retention → candidates → build."""
     run_discover(settings)
     run_check(settings, levels=parse_levels(levels))
     run_enrich(settings)
     run_score(settings)
+    # Retention и кандидаты — часть полного цикла (issue #26): без них
+    # локальный прогон накапливает историю бесконечно и не готовит
+    # кандидатов на подтверждение.
+    storage = create_storage(settings)
+    if not isinstance(storage, (JsonlStorage, SqliteStorage)):
+        raise click.ClickException(f"retention is not supported for {type(storage).__name__}")
+    dropped = prune_storage(
+        storage,
+        history_days=settings.retention.history_days,
+        max_results_per_stream=settings.retention.max_results_per_stream,
+    )
+    storage.close()
+    click.echo(f"Retention: удалено записей {dropped}")
+    run_candidates(settings, country=country)
     run_build(settings, country=country)
 
 

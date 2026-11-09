@@ -66,7 +66,7 @@ def test_xmltv_roundtrip() -> None:
     channels = [_channel(), _channel().model_copy(update={"tvg_id": None})]
     other = _programme().model_copy(update={"channel": "other"})
     text = render_xmltv(channels, [_programme(), other])
-    assert "<?xml" not in text or text.startswith("<tv")
+    assert text.startswith("<?xml")  # XML-декларация обязательна (issue #26)
 
     epg_channels, programmes = parse_xmltv(text)
     assert {c.id for c in epg_channels} == {"1tv.ru"}

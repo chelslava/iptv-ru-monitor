@@ -95,3 +95,65 @@ def test_deduplicate_merges_channels_and_streams() -> None:
         "https://a.example/1.m3u8",
         "https://b.example/1.m3u8",
     }
+
+
+# --- issue #26: URL-нормализация и безымянные каналы ----------------------
+
+
+def test_normalize_stream_url_canonical_form() -> None:
+    from iptv_monitor.normalization.deduplication import normalize_stream_url
+
+    # регистр схемы/хоста, default-порт, слэш, порядок query
+    assert normalize_stream_url("HTTP://Example.com:80/live.m3u8/?b=2&a=1") == normalize_stream_url(
+        "http://example.com/live.m3u8?a=1&b=2"
+    )
+    # https:443 тоже снимается
+    assert normalize_stream_url("https://ex.com:443/x.m3u8") == normalize_stream_url(
+        "https://ex.com/x.m3u8"
+    )
+    # схема остаётся различием (реально разные адреса)
+    assert normalize_stream_url("http://ex.com/x.m3u8") != normalize_stream_url(
+        "https://ex.com/x.m3u8"
+    )
+    # userinfo сохраняется (потоки с учётными данными в URL)
+    assert "@" in normalize_stream_url("http://user:pass@ex.com/x.m3u8")
+
+
+def test_url_normalized_dedup_catches_variant() -> None:
+    """Дубли с разным регистром/порядком query больше не переживают дедуп."""
+    channels = [_channel("ru-pervyi", "Первый канал")]
+    base = channels[0].channel_id
+    streams = [
+        _stream(base, "http://ex.com/live.m3u8?b=2&a=1"),
+        _stream(base, "HTTP://EX.com/live.m3u8/?a=1&b=2"),
+        _stream(base, "http://ex.com/other.m3u8"),
+    ]
+    merged_channels, merged_streams = deduplicate(channels, streams)
+    assert len(merged_streams) == 2  # дубль по канонической форме снят
+
+
+def _stream(channel_id: str, url: str):
+    from iptv_monitor.domain.enums import StreamProtocol
+    from iptv_monitor.domain.stream import Stream, make_stream_id
+
+    return Stream(
+        stream_id=make_stream_id(url),
+        channel_id=channel_id,
+        url=url,
+        protocol=StreamProtocol.HLS,
+        source_id="test",
+    )
+
+
+def test_unnamed_channels_do_not_collapse() -> None:
+    """Безымянные каналы остаются отдельными сущностями с разными id."""
+    channels = [_channel(f"ru-channel-{i}", "") for i in range(3)]
+    merged_channels, _ = deduplicate(channels, [])
+    assert len(merged_channels) == 3
+    assert len({c.channel_id for c in merged_channels}) == 3
+
+
+def test_unnamed_channel_id_deterministic() -> None:
+    ids1 = [c.channel_id for c in deduplicate([_channel("ru-channel-0", "")], [])[0]]
+    ids2 = [c.channel_id for c in deduplicate([_channel("ru-channel-0", "")], [])[0]]
+    assert ids1 == ids2

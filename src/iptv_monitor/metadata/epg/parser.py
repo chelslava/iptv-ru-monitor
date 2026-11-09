@@ -35,6 +35,11 @@ class EpgProgramme(BaseModel):
     stop: datetime | None = None
     title: str
     description: str | None = None
+    # Пробрасываются клиентам, если источник их даёт (issue #26): жанры
+    # и подзаголовки программ, иконка эпизода.
+    sub_title: str | None = None
+    category: str | None = None
+    icon: str | None = None
 
 
 def parse_xmltv_time(value: str) -> datetime:
@@ -89,6 +94,22 @@ def _iter_channels(root_stream) -> list[EpgChannelData]:
     return channels
 
 
+def _programme_fields(element) -> dict[str, object]:
+    """Текстовые поля элемента programme (title обязателен, issue #26)."""
+
+    def _text(tag: str) -> str | None:
+        el = element.find(tag)
+        return (el.text or "").strip() if el is not None and el.text else None
+
+    return {
+        "title": _text("title"),
+        "description": _text("desc"),
+        "sub_title": _text("sub-title"),
+        "category": _text("category"),
+        "icon": (element.find("icon").get("src") if element.find("icon") is not None else None),
+    }
+
+
 def _iter_programmes(root_stream, channel_ids: set[str] | None) -> list[EpgProgramme]:
     programmes: list[EpgProgramme] = []
     for _event, element in ET.iterparse(root_stream, events=("end",)):
@@ -102,20 +123,11 @@ def _iter_programmes(root_stream, channel_ids: set[str] | None) -> list[EpgProgr
                 except ValueError:
                     element.clear()
                     continue
-                title_el = element.find("title")
-                title = (title_el.text or "").strip() if title_el is not None else ""
+                fields = _programme_fields(element)
+                title = fields.get("title")
                 if title:
-                    desc_el = element.find("desc")
                     programmes.append(
-                        EpgProgramme(
-                            channel=channel,
-                            start=start,
-                            stop=stop,
-                            title=title,
-                            description=(desc_el.text or "").strip()
-                            if desc_el is not None
-                            else None,
-                        )
+                        EpgProgramme(channel=channel, start=start, stop=stop, **fields)  # type: ignore[arg-type]
                     )
             element.clear()
     return programmes
@@ -170,19 +182,12 @@ def parse_xmltv(source: str | Path) -> tuple[list[EpgChannelData], list[EpgProgr
             stop = parse_xmltv_time(stop_attr) if stop_attr else None
         except ValueError:
             continue
-        title_el = element.find("title")
-        title = (title_el.text or "").strip() if title_el is not None else ""
+        fields = _programme_fields(element)
+        title = fields.get("title")
         if not title:
             continue
-        desc_el = element.find("desc")
         programmes.append(
-            EpgProgramme(
-                channel=element.get("channel", ""),
-                start=start,
-                stop=stop,
-                title=title,
-                description=(desc_el.text or "").strip() if desc_el is not None else None,
-            )
+            EpgProgramme(channel=element.get("channel", ""), start=start, stop=stop, **fields)  # type: ignore[arg-type]
         )
 
     return channels, programmes

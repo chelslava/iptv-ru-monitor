@@ -237,11 +237,14 @@ async def fetch(
     max_redirects: int = 5,
     extra_headers: dict[str, str] | None = None,
     guard: bool = True,
+    timeout_seconds: float | None = None,
 ) -> FetchResult:
     """GET с ограничением читаемых байт и ручной проверкой редиректов.
 
     Ограничение тела защищает от «бесконечных» MPEG-TS ответов. Каждый
-    редирект проходит SSRF-проверку заново.
+    редирект проходит SSRF-проверку заново. ``timeout_seconds`` — тайм-аут
+    на уровне запроса (читается из check.hls_timeout_seconds /
+    check.segment_timeout_seconds, issue #26); None — тайм-аут клиента.
     """
     started = time.perf_counter()
     current = url
@@ -257,9 +260,18 @@ async def fetch(
 
             is_https = urlparse(current).scheme == "https"
             try:
-                response_ctx = client.stream(
-                    "GET", current, headers=extra_headers, follow_redirects=False
-                )
+                if timeout_seconds is not None:
+                    response_ctx = client.stream(
+                        "GET",
+                        current,
+                        headers=extra_headers,
+                        follow_redirects=False,
+                        timeout=timeout_seconds,
+                    )
+                else:
+                    response_ctx = client.stream(
+                        "GET", current, headers=extra_headers, follow_redirects=False
+                    )
                 async with response_ctx as response:
                     if is_https:
                         tls_ok = True

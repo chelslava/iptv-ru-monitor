@@ -157,6 +157,8 @@ async def check_stream(
             segment_max_bytes=settings.check.head_bytes,
             max_redirects=settings.check.max_redirects,
             extra_headers=ua_headers,
+            timeout_seconds=settings.check.hls_timeout_seconds,
+            segment_timeout_seconds=settings.check.segment_timeout_seconds,
         )
         result.playlist_ok = hls.playlist_ok
         result.first_segment_ok = hls.first_segment_ok
@@ -178,6 +180,7 @@ async def check_stream(
                 max_bytes=max(settings.check.head_bytes * 4, 262144),
                 max_redirects=settings.check.max_redirects,
                 extra_headers=ua_headers,
+                timeout_seconds=settings.check.hls_timeout_seconds,
             )
             result.dvr = dvr.ok
             result.dvr_hours = dvr.hours if dvr.ok else None

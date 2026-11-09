@@ -11,7 +11,7 @@ from ..settings import AppSettings
 
 logger = logging.getLogger(__name__)
 
-KNOWN_PROBE_LOCATIONS = ("github-runner", "ru-vds", "local")
+KNOWN_PROBE_LOCATIONS = ("github-runner", "home-ru", "ru-vds", "local")
 
 
 def resolve_probe_location(explicit: str | None = None, settings: AppSettings | None = None) -> str:
@@ -20,8 +20,16 @@ def resolve_probe_location(explicit: str | None = None, settings: AppSettings | 
     Приоритет: явный аргумент > конфигурация/окружение > эвристика
     (GitHub Actions → github-runner, иначе local). GitHub-hosted runner
     не считается российской точкой проверки и маркируется отдельно.
+    Опечатка в явной метке не проходит молча (issue #26): предупреждение
+    в лог; свободные метки не запрещены — их заводят новые точки.
     """
     if explicit:
+        if explicit not in KNOWN_PROBE_LOCATIONS:
+            logger.warning(
+                "unknown probe location %r (known: %s) — проверьте опечатки",
+                explicit,
+                ", ".join(KNOWN_PROBE_LOCATIONS),
+            )
         return explicit
     if settings and settings.probe_location and settings.probe_location != "local":
         return settings.probe_location

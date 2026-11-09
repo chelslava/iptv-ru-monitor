@@ -18,7 +18,7 @@ def test_country_from_tvg_id() -> None:
     assert country_from_tvg_id("1tv.ru") == "RU"
     assert country_from_tvg_id("2x2.ru@SD") == "RU"
     assert country_from_tvg_id("ChannelOne.ru") == "RU"
-    assert country_from_tvg_id("bbcone.uk") == "UK"
+    assert country_from_tvg_id("bbcone.uk") == "GB"
     assert country_from_tvg_id("Milliy.uz") == "UZ"
     assert country_from_tvg_id("Match") is None
     assert country_from_tvg_id(None) is None
