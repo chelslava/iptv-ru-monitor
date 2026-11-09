@@ -37,7 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Guard: home-ru freshness
+      - name: "Guard: home-ru freshness"
         # Ранний сигнал «ночной домашний прогон перестал приходить» (issue #11):
         # сборка краснеет, если данных home-ru нет дольше 36 часов.
         run: |
