@@ -15,12 +15,80 @@ import time
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse
 
+import httpcore
 import httpx
 
 from ..domain.enums import CheckErrorCode
 
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _SCHEMES = {"http", "https"}
+
+
+class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
+    """Соединяется только с IP, проверенными SSRF-защитой, в момент соединения.
+
+    Закрывает DNS-rebinding TOCTOU (issue #23): validate_url перед запросом
+    резолвит имя, но httpx резолвит второй раз при подключении — перебинденный
+    DNS мог успеть вернуть приватный IP. Здесь разрешение и проверка
+    выполняются в момент TCP-соединения, после чего соединение открывается
+    к проверенному адресу (внутренний AnyIO-backend сам резолвит IP-литерал
+    тривиально). TLS SNI и верификация сертификата остаются по имени хоста —
+    start_tls делает пул с оригинальным hostname.
+
+    Ошибки SSRF на этом уровне классифицируются как transport_error:
+    fetch() предварительно валидирует URL и даёт точные коды; этот backend —
+    страховка именно на гонку между проверкой и соединением.
+    """
+
+    def __init__(self) -> None:
+        self._inner = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: object | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        try:
+            ips = (
+                [host]
+                if _is_ip_literal(host)
+                else await asyncio.to_thread(resolve_hostname, host, port)
+            )
+        except socket.gaierror as exc:
+            raise httpcore.ConnectError(f"dns resolution failed: {host}") from exc
+
+        allowed: list[str] = []
+        for ip_str in ips:
+            try:
+                ip = ipaddress.ip_address(ip_str)
+            except ValueError as exc:
+                raise httpcore.ConnectError(f"unparseable address {ip_str!r}") from exc
+            if is_forbidden_ip(ip):
+                raise httpcore.ConnectError(f"ssrf pinned backend: forbidden ip range ({ip})")
+            allowed.append(ip_str)
+        if not allowed:
+            raise httpcore.ConnectError("ssrf pinned backend: empty dns answer")
+
+        last_exc: Exception | None = None
+        for ip_str in allowed:
+            try:
+                return await self._inner.connect_tcp(
+                    ip_str, port, timeout=timeout, local_address=local_address
+                )
+            except (httpcore.ConnectError, OSError) as exc:
+                last_exc = exc
+        raise last_exc or httpcore.ConnectError(f"no connectable address for {host}")
+
+
+def _is_ip_literal(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
 
 
 class UrlGuardError(Exception):
@@ -120,13 +188,23 @@ def create_client(
     timeout_seconds: float = 10.0,
     verify: bool = True,
 ) -> httpx.AsyncClient:
-    """HTTP-клиент с тайм-аутами; редиректы обрабатываются вручную (см. fetch)."""
+    """HTTP-клиент с тайм-аутами; редиректы обрабатываются вручную (см. fetch).
+
+    Транспорт с pinned-бэкендом (issue #23): DNS проверяется и закрепляется
+    в момент TCP-соединения — DNS-rebinding между validate_url и connect не
+    проходит.
+    """
     timeout = httpx.Timeout(connect=5.0, read=timeout_seconds, write=5.0, pool=5.0)
+    transport = httpx.AsyncHTTPTransport(verify=verify, retries=0)
+    # httpx 0.28 не прокидывает network_backend в пул — устанавливаем
+    # непосредственно (httpcore.AsyncConnectionPool._network_backend).
+    transport._pool._network_backend = _PinnedNetworkBackend()  # noqa: SLF001
     return httpx.AsyncClient(
         headers={"User-Agent": user_agent},
         timeout=timeout,
         follow_redirects=False,
         verify=verify,
+        transport=transport,
     )
 
 

@@ -16,7 +16,7 @@ import httpx
 from ..domain.check_result import CheckResult
 from ..domain.enums import CheckErrorCode, StreamProtocol
 from ..domain.stream import Stream
-from ..infrastructure.http_client import fetch
+from ..infrastructure.http_client import UrlGuardError, fetch, validate_url
 from ..infrastructure.logging import redact_text
 from ..settings import AppSettings
 from .ffprobe import probe_media
@@ -165,6 +165,19 @@ async def check_stream(
             result.dvr_hours = dvr.hours if dvr.ok else None
 
     # Уровень 3 — медиапараметры.
+    if "ffprobe" in level_set or "playback" in level_set:
+        # Субпроцессы ffprobe/ffmpeg ходят по сети сами, мимо httpx-транспорта
+        # с pinned-бэкендом (issue #23) — URL проверяется SSRF-защитой до
+        # запуска. Редиректы ffmpeg не перепроверяются: принятый остаточный
+        # риск (HTTP-уровень уже проверил цепочку редиректов; см. §8
+        # docs/ARCHITECTURE.md).
+        try:
+            await validate_url(stream.url)
+        except UrlGuardError as exc:
+            result.error_code = exc.error_code
+            result.error_message = redact_text(exc.reason or "ssrf blocked")
+            return result
+
     if "ffprobe" in level_set:
         media = await probe_media(
             stream.url,
