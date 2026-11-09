@@ -1,7 +1,7 @@
 """Политика публикации, страновые профили и кандидаты на подтверждение."""
 
 from .candidates import ApprovalCandidate, candidates_to_dicts, find_candidates
-from .country_profiles import SelectedStream, select_streams
+from .country_profiles import SelectedStream, best_per_channel, select_streams
 from .publication_policy import (
     APPROVED_STREAMS_FILENAME,
     PublishDecision,
@@ -15,6 +15,7 @@ __all__ = [
     "ApprovalCandidate",
     "PublishDecision",
     "SelectedStream",
+    "best_per_channel",
     "candidates_to_dicts",
     "decide_publication",
     "find_candidates",

@@ -1,8 +1,8 @@
 """Сопоставление каналов с EPG/XMLTV.
 
-Порядок: точное совпадение tvg_id → ручные алиасы → нормализованное имя.
-Нечёткое совпадение (FUZZY) зарезервировано и никогда не перезаписывает
-ручное подтверждение.
+Порядок: точное совпадение tvg_id → ручные алиасы → нормализованное имя →
+мост имён iptv-org/database. Нечёткое совпадение (FUZZY) зарезервировано
+и никогда не перезаписывает ручное подтверждение.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from ...domain.channel import Channel
 from ...domain.enums import MatchMethod
 from ...normalization.channel_names import normalize_name
 from ..aliases import AliasIndex
+from ..name_bridge import NameBridge
 from .parser import EpgChannelData
 
 
@@ -42,6 +43,7 @@ def match_epg(
     channels: list[Channel],
     epg_channels: list[EpgChannelData],
     aliases: AliasIndex,
+    bridge: NameBridge | None = None,
 ) -> list[EpgMatch]:
     """Сопоставить каналы с EPG-каналами (см. архитектуру, раздел 10)."""
     epg_ids = {c.id for c in epg_channels}
@@ -83,6 +85,7 @@ def match_epg(
 
         # 3. Нормализованное имя против display-name EPG.
         candidates = [channel.name, *channel.alt_names]
+        matched = False
         for name in candidates:
             tvg_id = by_norm_name.get(normalize_name(name))
             if tvg_id:
@@ -92,6 +95,30 @@ def match_epg(
                         tvg_id=tvg_id,
                         method=MatchMethod.NORMALIZED_NAME,
                         confidence=0.8,
+                        manual=False,
+                        original_name=name,
+                    )
+                )
+                matched = True
+                break
+        if matched:
+            continue
+
+        # 4. Мост имён iptv-org/database: id формата iptv-org раскрывается
+        # в каноническое имя + алиасы (включая русские), которые уже
+        # сравниваются с display-name EPG. Слабее собственного имени,
+        # потому что алиасы иногда обобщённые.
+        if bridge is None:
+            continue
+        for name in bridge.names_for(channel.tvg_id):
+            tvg_id = by_norm_name.get(normalize_name(name))
+            if tvg_id:
+                matches.append(
+                    EpgMatch(
+                        channel_id=channel.channel_id,
+                        tvg_id=tvg_id,
+                        method=MatchMethod.BRIDGE,
+                        confidence=0.7,
                         manual=False,
                         original_name=name,
                     )

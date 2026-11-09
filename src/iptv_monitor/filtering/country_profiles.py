@@ -88,3 +88,43 @@ def select_streams(
         )
 
     return selected
+
+
+def best_per_channel(
+    included: list[SelectedStream],
+) -> list[SelectedStream]:
+    """Один лучший поток на канал — защита от дублей в плейлисте (issue #6).
+
+    Канал дедуплицирован по имени, потоки — нет: один канал может иметь
+    несколько прошедших порог потоков из разных источников. В плейлист идёт
+    лучший по score (тай-брейки: больше проверок → короче URL → stable id),
+    остальные помечаются ``included=False`` с причиной superseded — отчёт
+    остаётся объясняющим, а «горячая замена» происходит естественно: при
+    падении лучшего потока его score проваливается ниже порога и следующий
+    build автоматически поднимает alternate.
+    Порядок остальных каналов не меняется.
+    """
+    by_channel: dict[str, list[SelectedStream]] = {}
+    for sel in included:
+        by_channel.setdefault(sel.channel.channel_id, []).append(sel)
+
+    best: list[SelectedStream] = []
+    for group in by_channel.values():
+        if len(group) == 1:
+            best.append(group[0])
+            continue
+
+        def rank(sel: SelectedStream) -> tuple[float, int, str, str]:
+            score = sel.score.score if sel.score and sel.score.score is not None else -1.0
+            checks = sel.score.checks if sel.score else 0
+            return (-score, -checks, sel.stream.url, sel.stream.stream_id)
+
+        ranked = sorted(group, key=rank)
+        winner = ranked[0]
+        best.append(winner)
+        for loser in ranked[1:]:
+            loser.included = False
+            loser.reasons.append(
+                f"superseded by better stream {winner.stream.stream_id} of the same channel"
+            )
+    return best

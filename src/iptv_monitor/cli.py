@@ -24,6 +24,7 @@ from .domain.stream import Stream
 from .filtering import (
     ApprovalCandidate,
     PublishDecision,
+    best_per_channel,
     candidates_to_dicts,
     decide_publication,
     find_candidates,
@@ -32,6 +33,7 @@ from .filtering import (
 )
 from .filtering.country_profiles import SelectedStream
 from .generators import (
+    assign_channel_numbers,
     build_report,
     channels_catalog,
     entry_for,
@@ -50,6 +52,7 @@ from .metadata import (
     EpgProgramme,
     match_epg,
     match_logos,
+    parse_channels_csv,
     parse_xmltv,
     validate_logo,
 )
@@ -63,6 +66,7 @@ from .settings import (
     load_country,
     load_epg_sources,
     load_logo_sources,
+    load_name_bridge,
     load_quality,
     load_settings,
     load_sources,
@@ -243,13 +247,26 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
     programmes: list[EpgProgramme] = []
     validated_logos: list = []
     epg_channels_out: list = []
+    bridge = None
+    bridge_cfg = load_name_bridge(settings.config_dir)
 
     async def _fetch() -> None:
-        nonlocal matches, programmes, validated_logos, epg_channels_out
+        nonlocal matches, programmes, validated_logos, epg_channels_out, bridge
         async with create_client(
             user_agent=settings.check.user_agent,
             timeout_seconds=settings.check.http_timeout_seconds,
         ) as client:
+            # Мост имён (issue #5): канонические имена/алиасы iptv-org/database
+            # расширяют сопоставление с EPG по именам. Ошибка загрузки не
+            # фатальна — сопоставление деградирует до обычных правил.
+            if bridge_cfg.enabled:
+                try:
+                    response = await client.get(bridge_cfg.url, follow_redirects=True)
+                    response.raise_for_status()
+                    bridge = parse_channels_csv(response.content.decode("utf-8", errors="replace"))
+                    click.echo(f"Мост имён: {len(bridge)} записей базы каналов")
+                except (httpx.HTTPError, ValueError):
+                    logger.warning("name bridge fetch failed", exc_info=True)
             for source in epg_sources:
                 try:
                     response = await client.get(source.url, follow_redirects=True)
@@ -273,7 +290,7 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                 except ValueError:
                     logger.warning("EPG source %s: invalid XMLTV", source.id)
                     continue
-                matches = match_epg(channels, epg_channels, aliases)
+                matches = match_epg(channels, epg_channels, aliases, bridge=bridge)
                 epg_channels_out = list(epg_channels)
                 click.echo(f"EPG: источник {source.id}, {len(epg_channels)} каналов XMLTV")
                 break
@@ -547,8 +564,9 @@ def run_build(
             decisions=decisions,
             best_heights=heights,
         )
-        included = [sel for sel in selected if sel.included]
+        included = best_per_channel([sel for sel in selected if sel.included])
         entries = [entry_for(sel.channel, sel.stream) for sel in included]
+        assign_channel_numbers(entries, overrides=country_profile.channel_numbers)
         (dist_country / playlist.filename).write_text(
             render_m3u(entries, epg_url=country_profile.epg_filename),
             encoding="utf-8",

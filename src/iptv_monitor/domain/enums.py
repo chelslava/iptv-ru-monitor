@@ -61,6 +61,7 @@ class MatchMethod(StrEnum):
     TVG_ID = "tvg_id"
     ALIAS = "alias"
     NORMALIZED_NAME = "normalized_name"
+    BRIDGE = "bridge"  # имя найдено через iptv-org/database (issue #5)
     FUZZY = "fuzzy"  # зарезервировано; не перезаписывает ручные совпадения
     MANUAL = "manual"
 

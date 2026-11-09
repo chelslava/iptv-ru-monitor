@@ -18,3 +18,11 @@ epg_sources:
       Публичный бесплатный телегайд; явная лицензия на данные отсутствует.
       Программы перепубликуются в dist/ru/russia.xml как сверка данных
       мониторинга; правовой статус — см. реестр источников.
+
+# Мост имён (issue #5): канонические имена и alt_names из iptv-org/database
+# (Unlicense). Раскрывает унаследованный tvg-id iptv-org («ChannelOne.ru@SD»)
+# в набор имён («Channel One», «Первый канал», …) для сопоставления с EPG,
+# у которых display-name на другом языке. Ошибка загрузки не фатальна.
+name_bridge:
+  enabled: true
+  url: "https://raw.githubusercontent.com/iptv-org/database/master/data/channels.csv"

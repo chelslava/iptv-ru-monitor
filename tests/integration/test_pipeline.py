@@ -125,10 +125,13 @@ def test_full_pipeline(env: SimpleNamespace) -> None:
     m3u_text = (dist_ru / "russia.m3u").read_text(encoding="utf-8")
     assert m3u_text.startswith("#EXTM3U")
     assert "1tv.ru" in m3u_text  # tvg-id из источника попал в плейлист
-    assert "stream.example.org/1tv" in m3u_text
-    assert "mirror.example.org" in m3u_text  # второй поток канала
+    # Один лучший поток на канал (issue #6): у «Первый канал» два здоровых
+    # потока, в плейлисте ровно один.
+    assert m3u_text.count('tvg-id="1tv.ru"') == 1
+    assert "stream.example.org/1tv" in m3u_text or "mirror.example.org" in m3u_text
     assert "matchtv.ru" not in m3u_text  # 403 -> исключён
     assert "token=" not in m3u_text  # секретный URL не опубликован
+    assert 'tvg-chno="' in m3u_text  # стабильная нумерация (issue #7)
     assert (dist_ru / "russia-kids.m3u").is_file()
     assert (dist_ru / "channels.json").is_file()
     assert (settings.dist_dir / "index.html").is_file()
@@ -140,6 +143,7 @@ def test_full_pipeline(env: SimpleNamespace) -> None:
     reasons = " ".join(reason for s in excluded for reason in (s["reasons"] or []))
     assert "secret" in reasons
     assert "score" in reasons or "below" in reasons
+    assert "superseded" in reasons  # проигравший поток канала объяснён (#6)
 
     # Публичный streams.json не содержит URL исключённых потоков.
     streams_json = json.loads((dist_ru / "streams.json").read_text(encoding="utf-8"))

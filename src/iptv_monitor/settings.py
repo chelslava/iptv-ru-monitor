@@ -264,6 +264,9 @@ class CountryProfile(BaseModel):
     playlists: list[CountryPlaylist] = Field(default_factory=list)
     epg_filename: str | None = None
     aliases: list[AliasRule] = Field(default_factory=list)
+    # Ручные номера каналов для tvg-chno (issue #7). Ключ — имя или его
+    # устойчивая часть; номер резервируется до hash-нумерации остальных.
+    channel_numbers: dict[str, int] = Field(default_factory=dict)
 
 
 def load_country(config_dir: Path, country: str) -> CountryProfile:
@@ -292,6 +295,13 @@ class EpgSource(BaseModel):
     url: str
     trust_level: float = 0.5
     license_note: str | None = None
+
+
+class NameBridgeSettings(BaseModel):
+    """Мост имён iptv-org/database (ключ name_bridge в epg_sources.yaml)."""
+
+    enabled: bool = False
+    url: str = "https://raw.githubusercontent.com/iptv-org/database/master/data/channels.csv"
 
 
 class LogoSource(BaseModel):
@@ -328,6 +338,12 @@ def load_logo_sources(config_dir: Path) -> LogoSourcesFile:
     )
 
 
+def load_name_bridge(config_dir: Path) -> NameBridgeSettings:
+    """Мост имён: ключ name_bridge в epg_sources.yaml (issue #5)."""
+    raw = read_yaml(config_dir / "epg_sources.yaml")
+    return NameBridgeSettings.model_validate(raw.get("name_bridge") or {})
+
+
 __all__ = [
     "AliasRule",
     "ApprovalSettings",
@@ -339,6 +355,7 @@ __all__ = [
     "EpgSource",
     "LogoOverride",
     "LogoSource",
+    "NameBridgeSettings",
     "LogoSourcesFile",
     "PublicPolicy",
     "QualityFile",
@@ -351,6 +368,7 @@ __all__ = [
     "load_country",
     "load_epg_sources",
     "load_logo_sources",
+    "load_name_bridge",
     "load_quality",
     "load_settings",
     "load_sources",
