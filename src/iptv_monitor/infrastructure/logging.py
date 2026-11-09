@@ -10,31 +10,16 @@ import logging
 import re
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
-_TOKEN_KEYS = {
-    "token",
-    "key",
-    "auth",
-    "signature",
-    "password",
-    "pwd",
-    "secret",
-    "expires",
-    "expire",
-    "jwt",
-    "access_token",
-    "api_key",
-    "hash",
-}
+from .secrets import MASK, TOKEN_KEYS, TOKEN_VALUE_RE
 
 _URL_RE = re.compile(r"https?://[^\s\"'<>]+")
-_LONG_VALUE_RE = re.compile(r"^[A-Za-z0-9_\-\.]{24,}$")  # похоже на токен/base64
 
-_MASK = "***"
+_MASK = MASK
 
 
 def redact_query_value(key: str, value: str) -> str:
     """Маскировать значение параметра, если ключ подозрителен или значение похоже на токен."""
-    if key.lower() in _TOKEN_KEYS or _LONG_VALUE_RE.match(value):
+    if key.lower() in TOKEN_KEYS or TOKEN_VALUE_RE.match(value):
         return _MASK
     return value
 

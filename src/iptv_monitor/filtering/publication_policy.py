@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
@@ -21,24 +20,7 @@ from ..domain.channel import Channel
 from ..domain.enums import PublicationStatus, PublicPolicy
 from ..domain.source import SourceConfig
 from ..domain.stream import Stream
-
-# Параметры, значения которых маскируются и запрещают публикацию URL.
-_TOKEN_KEYS = {
-    "token",
-    "key",
-    "auth",
-    "signature",
-    "password",
-    "pwd",
-    "secret",
-    "expires",
-    "expire",
-    "jwt",
-    "access_token",
-    "api_key",
-    "hash",
-}
-_TOKEN_VALUE_RE = re.compile(r"^[A-Za-z0-9_\-\.]{24,}$")
+from ..infrastructure.secrets import TOKEN_KEYS, TOKEN_VALUE_RE
 
 APPROVED_STREAMS_FILENAME = "approved_streams.yaml"
 
@@ -49,9 +31,9 @@ def url_has_secrets(url: str) -> str | None:
     if parts.username or parts.password:
         return "url contains credentials"
     for key, value in parse_qsl(parts.query, keep_blank_values=True):
-        if key.lower() in _TOKEN_KEYS:
+        if key.lower() in TOKEN_KEYS:
             return f"secret query parameter {key!r}"
-        if _TOKEN_VALUE_RE.match(value):
+        if TOKEN_VALUE_RE.match(value):
             return f"token-like query parameter {key!r}"
     return None
 
