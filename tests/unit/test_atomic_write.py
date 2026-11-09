@@ -66,18 +66,12 @@ def test_retention_prune_atomic(tmp_path: Path, monkeypatch) -> None:
     from datetime import UTC, datetime, timedelta
 
     now = datetime.now(UTC)
-    results = (
-        [  # свежие — останутся в истории и попадут в перезапись
-            CheckResult(stream_id=f"fresh{i}", probe_location="test", checked_at=now)
-            for i in range(2)
-        ]
-        + [  # старые — отвалится retention'ом, перезапись будет запущена
-            CheckResult(
-                stream_id=f"old{i}", probe_location="test", checked_at=now - timedelta(days=31)
-            )
-            for i in range(3)
-        ]
-    )
+    results = [  # свежие — останутся в истории и попадут в перезапись
+        CheckResult(stream_id=f"fresh{i}", probe_location="test", checked_at=now) for i in range(2)
+    ] + [  # старые — отвалится retention'ом, перезапись будет запущена
+        CheckResult(stream_id=f"old{i}", probe_location="test", checked_at=now - timedelta(days=31))
+        for i in range(3)
+    ]
     storage.append(results)
     before = storage.path.read_text(encoding="utf-8")
 
