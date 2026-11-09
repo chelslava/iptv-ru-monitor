@@ -18,6 +18,11 @@ htmlcov/
 
 # Generated artifacts
 dist/
+# Локальные рабочие каталоги scripts/merge_history.sh (результаты слияния
+# живут в CI-артефактах и ветках probe/ru, history/global — не в git).
+artifacts/
+probe/
+deploy/vds/data/state/*.jsonl
 
 # Runtime data (keep directory placeholders)
 data/cache/*
