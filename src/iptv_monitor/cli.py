@@ -41,6 +41,7 @@ from .generators import (
     build_stats,
     channels_catalog,
     entry_for,
+    render_countries_hub,
     render_index_html,
     render_m3u,
     render_xmltv,
@@ -864,19 +865,30 @@ def run_build(
 
     # Индексная страница.
     settings.dist_dir.mkdir(parents=True, exist_ok=True)
+    # Страновая страница: поиск работает по каталогу своей страны,
+    # пути относительные (волна 3). Корневой index.html — hub ссылок
+    # на страны: раньше его перезаписывала последняя собранная страна,
+    # и поиск RU уходил в пути UZ.
     atomic_write_text(
-        settings.dist_dir / "index.html",
+        dist_country / "index.html",
         render_index_html(
             site_title=f"iptv-ru-monitor — {country_profile.name or country}",
             playlists=written,
-            report_path=f"{country.lower()}/report.json",
+            report_path="report.json",
             last_generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
             stats=stats,
             top_channels=top_channels,
-            catalog_path=f"{country.lower()}/channels.json",
+            catalog_path="channels.json",
         ),
-        encoding="utf-8",
     )
+    countries = []
+    for code in available_countries(settings.config_dir):
+        try:
+            profile = load_country(settings.config_dir, code)
+        except FileNotFoundError:  # pragma: no cover - гонка удаления
+            continue
+        countries.append({"code": code.lower(), "name": profile.name or code})
+    atomic_write_text(settings.dist_dir / "index.html", render_countries_hub(countries))
     return {"written": written}
 
 

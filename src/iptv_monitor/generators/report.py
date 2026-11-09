@@ -150,6 +150,40 @@ def build_stats(
     }
 
 
+def render_countries_hub(countries: list[dict[str, str]]) -> str:
+    """Корневая страница: ссылки на каталоги стран (волна 3).
+
+    Раньше корневой index.html перезаписывался последней собранной страной —
+    при двух странах поиск RU-каталога уходил в пути UZ.
+    """
+    rows = "".join(
+        f'<li><a href="{html.escape(c["code"])}/index.html">{html.escape(c["name"])}</a> '
+        f'<span style="color:#57606a;">({html.escape(c["code"])})</span></li>'
+        for c in countries
+        if c.get("code") and c.get("name")
+    )
+    return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iptv-ru-monitor — каталоги по странам</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 40rem;
+        padding: 0 1rem; }}
+  li {{ margin: .5rem 0; font-size: 1.1rem; }}
+</style>
+</head>
+<body>
+<h1>iptv-ru-monitor</h1>
+<p>Каталоги каналов и плейлисты по странам:</p>
+<ul>{rows}</ul>
+<footer>Сгенерировано автоматически · iptv-ru-monitor {__version__}</footer>
+</body>
+</html>
+"""
+
+
 def render_index_html(
     *,
     site_title: str,
