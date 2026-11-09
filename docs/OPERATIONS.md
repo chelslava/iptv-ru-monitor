@@ -97,6 +97,22 @@ IPTV_LIMIT=500 IPTV_LEVELS=http,hls,ffprobe bash scripts/ru_probe_push.sh
 Применяется командой `iptv-monitor retention` (запускайте периодически
 на VDS или в CI).
 
+## Автоматические PR кандидатов
+
+Workflow `approve-candidates` создаёт PR автоматически. Разрешение включено
+через API (2026-11-09; эквивалент галочки Settings → Actions → General →
+Workflow permissions → «Allow GitHub Actions to create and approve pull
+requests»):
+
+```bash
+gh api -X PUT repos/<owner>/<repo>/actions/permissions/workflow   -F default_workflow_permissions=read -F can_approve_pull_request_reviews=true
+```
+
+Если разрешение снова отключено, workflow сам откатывается на issue с
+compare-ссылкой (см. approve-candidates.yml). Ограничение GitHub: PR,
+созданные GITHUB_TOKEN, не запускают CI на самих себя — для data-only PR
+(approved_streams.yaml) это не мешает merge и последующей сборке.
+
 ## Публикация
 
 GitHub Pages публикует содержимое артефакта `dist` (workflow
