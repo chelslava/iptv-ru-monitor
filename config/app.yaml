@@ -25,6 +25,12 @@ check:
   ffprobe_timeout_seconds: 30.0
   playback_duration_seconds: 10.0
   user_agent: "iptv-ru-monitor/0.1"
+  # DVR-проба Flussonic (issue #10): включена в безопасном скоупе —
+  # только для approved-потоков (~100 шт., по 2 запроса после успешного
+  # базового чека). Собирает dvr/dvr_hours в историю; при накоплении
+  # данных в плейлисте появятся catchup-атрибуты TiviMate.
+  dvr_probe: true
+  dvr_probe_scope: approved
 
 storage:
   # jsonl | sqlite

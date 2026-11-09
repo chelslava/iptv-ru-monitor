@@ -52,8 +52,10 @@ class CheckSettings(BaseModel):
     playback_duration_seconds: float = 10.0
     user_agent: str = "iptv-ru-monitor/0.1"
     # DVR-проба Flussonic (issue #10): catchup-атрибуты в плейлисте.
-    # Выключено до стабилизации — включается здесь (true) после прогона.
+    # dvr_probe_scope: «approved» — только подтверждённые потоки
+    # (два запроса на поток лишь для ~100 штук), «all» — все прошедшие HLS.
     dvr_probe: bool = False
+    dvr_probe_scope: str = "all"
 
 
 class StorageSettings(BaseModel):

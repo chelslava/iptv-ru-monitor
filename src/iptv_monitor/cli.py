@@ -6,6 +6,7 @@ import asyncio
 import gzip
 import json
 import logging
+import xml.etree.ElementTree as ET
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -54,8 +55,10 @@ from .metadata import (
     EpgProgramme,
     match_epg,
     match_logos,
+    namespace_epg,
     parse_channels_csv,
-    parse_xmltv,
+    parse_xmltv_channels,
+    parse_xmltv_programmes,
     validate_logo,
 )
 from .normalization import normalize_discovered
@@ -210,6 +213,11 @@ def run_check(
         resolved_country = country_code
         if resolved_country is None and settings.geo.ip_info_url:
             resolved_country = await detect_country_code(active, settings.geo.ip_info_url)
+        # Скоуп DVR-пробы (issue #10): «approved» — только подтверждённые
+        # и опубликованные потоки (~100 шт.), «all» — все прошедшие HLS.
+        dvr_stream_ids: set[str] | None = None
+        if settings.check.dvr_probe and settings.check.dvr_probe_scope == "approved":
+            dvr_stream_ids = load_approved_ids(settings.state_dir)
         return await run_checks(
             streams,
             active,
@@ -218,6 +226,7 @@ def run_check(
             probe_location=probe_location,
             country_code=resolved_country,
             progress=_progress,
+            dvr_stream_ids=dvr_stream_ids,
         )
 
     results = asyncio.run(_run())
@@ -254,30 +263,38 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
 
     async def _fetch() -> None:
         nonlocal matches, programmes, validated_logos, epg_channels_out, bridge
+        # EPG-файлы бывают до сотен МБ — таймаут только на соединение.
         async with create_client(
             user_agent=settings.check.user_agent,
-            timeout_seconds=settings.check.http_timeout_seconds,
+            timeout_seconds=10.0,
         ) as client:
             # Мост имён (issue #5): канонические имена/алиасы iptv-org/database
             # расширяют сопоставление с EPG по именам. Ошибка загрузки не
             # фатальна — сопоставление деградирует до обычных правил.
             if bridge_cfg.enabled:
                 try:
-                    response = await client.get(bridge_cfg.url, follow_redirects=True)
+                    response = await client.get(
+                        bridge_cfg.url, follow_redirects=True, timeout=300.0
+                    )
                     response.raise_for_status()
                     bridge = parse_channels_csv(response.content.decode("utf-8", errors="replace"))
                     click.echo(f"Мост имён: {len(bridge)} записей базы каналов")
                 except (httpx.HTTPError, ValueError):
                     logger.warning("name bridge fetch failed", exc_info=True)
+
+            # Мультиисточниковый EPG (issue #5): все источники грузятся,
+            # id неймспейсится («epg-pw-ru:7103»), матч — по объединению.
+            payloads: list[tuple[str, bytes]] = []
+            epg_channels_all: list = []
             for source in epg_sources:
                 try:
-                    response = await client.get(source.url, follow_redirects=True)
+                    response = await client.get(source.url, follow_redirects=True, timeout=600.0)
                     response.raise_for_status()
                 except httpx.HTTPError:
                     logger.warning("EPG source %s failed", source.id, exc_info=True)
                     continue
-                # Некоторые провайдеры отдают XMLTV gzip-файлом (.xml.gz),
-                # а не content-encoding — распаковываем по magic bytes.
+                # Провайдеры отдают XMLTV gzip-файлом (.xml.gz), а не
+                # content-encoding — распаковываем по magic bytes.
                 payload = response.content
                 if payload[:2] == b"\x1f\x8b":
                     try:
@@ -286,16 +303,31 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                         logger.warning("EPG source %s: broken gzip", source.id)
                         continue
                 try:
-                    epg_channels, programmes = parse_xmltv(
-                        payload.decode("utf-8", errors="replace")
-                    )
-                except ValueError:
-                    logger.warning("EPG source %s: invalid XMLTV", source.id)
+                    epg_channels = parse_xmltv_channels(payload)
+                except ET.ParseError:
+                    logger.warning("EPG source %s: invalid XMLTV", source.id, exc_info=True)
                     continue
-                matches = match_epg(channels, epg_channels, aliases, bridge=bridge)
-                epg_channels_out = list(epg_channels)
+                ns_channels, _ = namespace_epg(source.id, epg_channels, [])
+                epg_channels_all.extend(ns_channels)
+                payloads.append((source.id, payload))
                 click.echo(f"EPG: источник {source.id}, {len(epg_channels)} каналов XMLTV")
-                break
+
+            if epg_channels_all:
+                matches = match_epg(channels, epg_channels_all, aliases, bridge=bridge)
+                matched_by_prefix: dict[str, set[str]] = {}
+                for m in matches:
+                    source_id, _, raw = m.tvg_id.partition(":")
+                    matched_by_prefix.setdefault(source_id, set()).add(raw)
+                for source_id, payload in payloads:
+                    raw_ids = matched_by_prefix.get(source_id, set())
+                    try:
+                        source_programmes = parse_xmltv_programmes(payload, raw_ids)
+                    except ET.ParseError:
+                        logger.warning("EPG source %s: programmes parse failed", source_id)
+                        continue
+                    _, ns_programmes = namespace_epg(source_id, [], source_programmes)
+                    programmes.extend(ns_programmes)
+                epg_channels_out = epg_channels_all
 
             # Логотипы: кандидаты проходят проверку доступности/MIME/размера
             # (архитектура §10), непроходимые отбрасываются.

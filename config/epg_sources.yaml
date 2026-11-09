@@ -19,6 +19,19 @@ epg_sources:
       Программы перепубликуются в dist/ru/russia.xml как сверка данных
       мониторинга; правовой статус — см. реестр источников.
 
+  # Второй источник (issue #5): RU-каналы с русскими display-name
+  # (файл в windows-1251 — декодируется по содержимому, см. decode_xmltv).
+  # ~4300 каналов, gzip ~80 МБ; разбор в два прохода iterparse.
+  - id: iptvx-ru
+    enabled: true
+    format: xmltv
+    url: "https://iptvx.one/EPG"
+    trust_level: 0.6
+    license_note: >
+      Файл EPG сообщества IPTV (портал iptvx.one); явной лицензии на данные
+      нет, файл повсеместно используется IPTV-сборками. Статус фиксируется
+      в реестре docs/SOURCE_POLICY.md.
+
 # Мост имён (issue #5): канонические имена и alt_names из iptv-org/database
 # (Unlicense). Раскрывает унаследованный tvg-id iptv-org («ChannelOne.ru@SD»)
 # в набор имён («Channel One», «Первый канал», …) для сопоставления с EPG,

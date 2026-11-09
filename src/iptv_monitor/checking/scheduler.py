@@ -60,6 +60,7 @@ async def check_stream(
     country_code: str | None = None,
     ffprobe_bin: str | None = None,
     ffmpeg_bin: str | None = None,
+    dvr_probe: bool | None = None,
 ) -> CheckResult:
     """Выполнить уровни проверки одного потока и собрать CheckResult."""
     result = CheckResult(
@@ -104,8 +105,10 @@ async def check_stream(
             return result
 
         # DVR-проба (issue #10): только после успешного базового чека,
-        # не более двух запросов; отключается в config (check.dvr_probe).
-        if settings.check.dvr_probe and hls.playlist_ok and hls.first_segment_ok and hls.media_url:
+        # не более двух запросов. Включается config'ом (check.dvr_probe);
+        # dvr_probe=False из run_checks сужает скоуп до заданных потоков.
+        probe_dvr_enabled = settings.check.dvr_probe if dvr_probe is None else dvr_probe
+        if probe_dvr_enabled and hls.playlist_ok and hls.first_segment_ok and hls.media_url:
             dvr = await probe_dvr(
                 hls.media_url,
                 client,
@@ -161,11 +164,14 @@ async def run_checks(
     ffprobe_bin: str | None = None,
     ffmpeg_bin: str | None = None,
     progress: Callable[[int, CheckResult], None] | None = None,
+    dvr_stream_ids: set[str] | None = None,
 ) -> list[CheckResult]:
     """Проверить потоки с ограничением параллелизма.
 
     Результаты возвращаются в порядке входного списка; прогресс-колбэк
-    вызывается по завершении каждого потока.
+    вызывается по завершении каждого потока. ``dvr_stream_ids`` ограничивает
+    DVR-пробу (catchup) конкретными потоками (смягчение нагрузки на
+    источники): None — для всех, если включён check.dvr_probe.
     """
     semaphore = asyncio.Semaphore(concurrency or settings.check.concurrency)
     completed = 0
@@ -174,6 +180,9 @@ async def run_checks(
     async def _one(stream: Stream) -> CheckResult:
         nonlocal completed
         async with semaphore:
+            dvr_enabled = settings.check.dvr_probe and (
+                dvr_stream_ids is None or stream.stream_id in dvr_stream_ids
+            )
             result = await check_stream(
                 stream,
                 client,
@@ -183,6 +192,7 @@ async def run_checks(
                 country_code=country_code,
                 ffprobe_bin=ffprobe_bin,
                 ffmpeg_bin=ffmpeg_bin,
+                dvr_probe=dvr_enabled,
             )
         async with lock:
             completed += 1
