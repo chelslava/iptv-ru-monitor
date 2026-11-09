@@ -282,9 +282,14 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                 except (httpx.HTTPError, ValueError):
                     logger.warning("name bridge fetch failed", exc_info=True)
 
-            # Мультиисточниковый EPG (issue #5): все источники грузятся,
-            # id неймспейсится («epg-pw-ru:7103»), матч — по объединению.
-            payloads: list[tuple[str, bytes]] = []
+            # Мультиисточниковый EPG (issue #5): источники обрабатываются по
+            # порядку конфига; id неймспейсится («epg-pw-ru:7103») — числовые
+            # id разных провайдеров сталкиваются. Канал уходит первому
+            # источнику, давшему МАТЧ С ПРОГРАММАМИ: если у источника нет
+            # передач для канала, канал возвращается в очередь и пробуется
+            # следующим (иначе «пустой» матч у epg.pw навсегда крадёт канал
+            # у iptvx, у которого программы есть).
+            pending = list(channels)
             epg_channels_all: list = []
             for source in epg_sources:
                 try:
@@ -309,25 +314,41 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                     continue
                 ns_channels, _ = namespace_epg(source.id, epg_channels, [])
                 epg_channels_all.extend(ns_channels)
-                payloads.append((source.id, payload))
-                click.echo(f"EPG: источник {source.id}, {len(epg_channels)} каналов XMLTV")
+                click.echo(
+                    f"EPG: источник {source.id}, {len(epg_channels)} каналов XMLTV, "
+                    f"каналов в очереди {len(pending)}"
+                )
+                if not epg_channels:
+                    continue
 
-            if epg_channels_all:
-                matches = match_epg(channels, epg_channels_all, aliases, bridge=bridge)
+                source_matches = match_epg(pending, ns_channels, aliases, bridge=bridge)
+                if not source_matches:
+                    continue
                 matched_by_prefix: dict[str, set[str]] = {}
-                for m in matches:
+                for m in source_matches:
                     source_id, _, raw = m.tvg_id.partition(":")
                     matched_by_prefix.setdefault(source_id, set()).add(raw)
-                for source_id, payload in payloads:
-                    raw_ids = matched_by_prefix.get(source_id, set())
-                    try:
-                        source_programmes = parse_xmltv_programmes(payload, raw_ids)
-                    except ET.ParseError:
-                        logger.warning("EPG source %s: programmes parse failed", source_id)
-                        continue
-                    _, ns_programmes = namespace_epg(source_id, [], source_programmes)
-                    programmes.extend(ns_programmes)
-                epg_channels_out = epg_channels_all
+                try:
+                    source_programmes = parse_xmltv_programmes(
+                        payload, matched_by_prefix.get(source.id, set())
+                    )
+                except ET.ParseError:
+                    logger.warning("EPG source %s: programmes parse failed", source.id)
+                    continue
+                _, ns_programmes = namespace_epg(source.id, [], source_programmes)
+                programmes.extend(ns_programmes)
+
+                # Матчи без программ бесполезны — канал пробуется в следующем источнике.
+                with_programmes = {p.channel for p in ns_programmes}
+                useful = [m for m in source_matches if m.tvg_id in with_programmes]
+                useless_count = len(source_matches) - len(useful)
+                matched_ids = {m.channel_id for m in useful}
+                pending = [c for c in pending if c.channel_id not in matched_ids]
+                matches.extend(useful)
+                if useless_count:
+                    click.echo(f"EPG: {source.id}: {useless_count} матчей без программ — в очередь")
+
+            epg_channels_out = epg_channels_all
 
             # Логотипы: кандидаты проходят проверку доступности/MIME/размера
             # (архитектура §10), непроходимые отбрасываются.
