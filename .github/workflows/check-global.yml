@@ -125,22 +125,26 @@ jobs:
           fi
           gzip -c "$F" > "$WORKTREE/checks-global-$STAMP.jsonl.gz"
           # Ретенция в ветке: удаляем файлы старше 30 дней по дате в имени.
+          # Git-команды — в подshell с cd: cwd родителя не меняется, иначе
+          # cleanup-trap падает «Unable to read current working directory».
           CUTOFF=$(date -u -d "30 days ago" +%Y%m%d)
-          cd "$WORKTREE"
-          for f in checks-global-*.jsonl.gz; do
-            [[ -e "$f" ]] || continue
-            d=$(sed -E 's/checks-global-([0-9]{8})-.*/\1/' <<<"$f")
-            if (( d < CUTOFF )); then git rm -q "$f"; fi
-          done
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Нет изменений в истории — пуш пропущен"
-          else
-            git config user.name "iptv-ru-monitor bot"
-            git config user.email "bot@users.noreply.github.com"
-            git commit -m "history: github-runner $STAMP (slot $ROTATE_SLOT/$ROTATE_PARTS)"
-            git push origin "$BRANCH"
-          fi
+          (
+            cd "$WORKTREE"
+            for f in checks-global-*.jsonl.gz; do
+              [[ -e "$f" ]] || continue
+              d=$(sed -E 's/checks-global-([0-9]{8})-.*/\1/' <<<"$f")
+              if (( d < CUTOFF )); then git rm -q "$f"; fi
+            done
+            git add -A
+            if git diff --cached --quiet; then
+              echo "Нет изменений в истории — пуш пропущен"
+            else
+              git config user.name "iptv-ru-monitor bot"
+              git config user.email "bot@users.noreply.github.com"
+              git commit -m "history: github-runner $STAMP (slot $ROTATE_SLOT/$ROTATE_PARTS)"
+              git push origin "$BRANCH"
+            fi
+          )
 
       - name: Mark roadmap failing
         if: failure()
