@@ -137,6 +137,9 @@ flowchart TD
 
 Уровни: `90–100 excellent` · `75–89 good` · `50–74 unstable` · `0–49 failed`.
 Меньше `min_checks` проверок → `insufficient_data` (в плейлисты не попадает).
+Балл — взвешенное среднее по компонентам с данными (ffprobe выключен не
+занижает балл); без контентных доказательств (только HTTP) — максимум
+`unstable` (issue #21).
 Калибровка — [docs/QUALITY_SCORING.md](docs/QUALITY_SCORING.md).
 </details>
 

@@ -50,8 +50,10 @@ def test_flaky_history_is_between(make_result) -> None:
     assert score.level in (QualityLevel.GOOD, QualityLevel.UNSTABLE)
 
 
-def test_missing_components_score_zero_contribution(make_result) -> None:
-    # Только HTTP-успехи: HLS/медиа-компоненты отсутствуют и не завышают балл.
+def test_missing_components_capped_without_content_proof(make_result) -> None:
+    # Только HTTP-успехи: нет ни плейлиста, ни сегмента — контентных
+    # доказательств нет, поток не поднимается выше unstable (issue #21),
+    # даже при нормализации весов.
     results = [
         make_result(
             playlist_ok=None,
@@ -64,9 +66,21 @@ def test_missing_components_score_zero_contribution(make_result) -> None:
     ]
     score = score_stream("s1", results, weights=WEIGHTS, levels=LEVELS, min_checks=5)
     assert score.score is not None
-    # только availability (35) + частично hls=0/stability=0 → существенно ниже отличного
-    assert score.score <= 35
-    assert score.level == QualityLevel.FAILED
+    assert score.score <= 74
+    assert score.level == QualityLevel.UNSTABLE
+
+
+def test_http_hls_perfect_history_reaches_excellent(make_result) -> None:
+    # Штатный конвейер (http,hls без ffprobe): media-компонент отсутствует,
+    # но нормализация весов не наказывает — максимум остаётся 100 (issue #21).
+    results = [
+        make_result(width=None, height=None)  # ffprobe выключен: высоты нет
+        for _ in range(10)
+    ]
+    score = score_stream("s1", results, weights=WEIGHTS, levels=LEVELS, min_checks=5)
+    assert score.score is not None
+    assert score.score >= 90
+    assert score.level == QualityLevel.EXCELLENT
 
 
 def test_weights_sum_to_one() -> None:

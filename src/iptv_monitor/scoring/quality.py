@@ -97,8 +97,12 @@ def score_stream(
 ) -> StreamScore:
     """Посчитать рейтинг потока по истории.
 
-    Компонент без данных даёт 0 вклада (консервативно): поток, который
-    не проверялся на уровне HLS/медиа, не получает завышенного балла.
+    Веса нормализуются по компонентам с данными (issue #21): поток,
+    проверенный штатным конвейером http,hls (ffprobe выключен), не
+    недооценивается из-за отсутствующего media-компонента — его максимум
+    остаётся 100, а не 85. Консервативный случай (поток вообще без
+    контентных доказательств — только HTTP 200 без попыток HLS) ограничен
+    уровнем unstable: без сегмента/плейлиста нельзя считать поток хорошим.
     """
     components = ComponentScores(
         availability=availability_score(results),
@@ -124,9 +128,19 @@ def score_stream(
         "media": (components.media, weights.media),
         "hls": (components.hls, weights.hls),
     }
-    total = sum(
+    weighted = sum(
         (value if value is not None else 0.0) * weight for value, weight in weight_map.values()
     )
+    available_weight = sum(weight for value, weight in weight_map.values() if value is not None)
+    # weighted — взвешенная сумма значений 0–100; деление на сумму весов
+    # даёт взвешенное среднее на той же шкале 0–100.
+    total = weighted / available_weight if available_weight > 0 else 0.0
+
+    # Контентные доказательства: сегмент/плейлист. Только HTTP-успехи
+    # (прямой TS, error page с 200) не поднимают поток выше unstable —
+    # публикация всё равно требует сегмента (approval.require_segment).
+    if components.stability is None and components.hls is None:
+        total = min(total, levels.good - 1)
 
     if total >= levels.excellent:
         level = QualityLevel.EXCELLENT
