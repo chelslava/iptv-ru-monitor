@@ -46,6 +46,16 @@ def build_report(
     for r in results:
         by_stream[r.stream_id].append(r)
 
+    # Потоки, «оживлённые» UA-fallback'ом (issue #18): последняя успешная
+    # проверка прошла с браузерным User-Agent.
+    ua_recovered = 0
+    for stream_results in by_stream.values():
+        for r in sorted(stream_results, key=lambda x: x.checked_at, reverse=True):
+            if r.is_success():
+                if r.ua_required:
+                    ua_recovered += 1
+                break
+
     return {
         "generated_at": generated_at.isoformat(),
         "check_version": __version__,
@@ -61,6 +71,7 @@ def build_report(
             "top_error_codes": dict(error_codes.most_common(10)),
             "lifecycle_stale": sum(1 for lc in lifecycle.values() if lc.stale and not lc.denied),
             "lifecycle_denied": sum(1 for lc in lifecycle.values() if lc.denied),
+            "ua_fallback_recovered": ua_recovered,
         },
         "streams": [
             {

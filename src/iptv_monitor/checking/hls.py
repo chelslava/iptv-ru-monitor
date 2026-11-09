@@ -107,12 +107,15 @@ async def probe_dvr(
     max_bytes: int = 262144,
     max_redirects: int = 5,
     hours_ago: int = 1,
+    extra_headers: dict[str, str] | None = None,
 ) -> DvrOutcome:
     """DVR-проба Flussonic: не более двух запросов после успешного базового чека.
 
     Варианты по порядку: ``?utc=<epoch>`` на media URL, затем
     ``timeshift_abs-{utc}.m3u8`` в той же директории. Успех = 2xx и
     валидный media playlist с сегментами за час назад (DVR >= 1 ч).
+    ``extra_headers`` (например, браузерный User-Agent, issue #18)
+    прокидываются в каждый запрос.
     """
     utc = int(time.time()) - hours_ago * 3600
     separator = "&" if "?" in media_url else "?"
@@ -121,7 +124,13 @@ async def probe_dvr(
         flussonic_timeshift_url(media_url, utc),
     ]
     for url in candidates:
-        response = await fetch(client, url, max_bytes=max_bytes, max_redirects=max_redirects)
+        response = await fetch(
+            client,
+            url,
+            max_bytes=max_bytes,
+            max_redirects=max_redirects,
+            extra_headers=extra_headers,
+        )
         if response.error_code or response.status >= 400:
             continue
         text = response.body.decode("utf-8", errors="replace")
@@ -137,15 +146,24 @@ async def check_hls(
     max_bytes: int = 262144,
     segment_max_bytes: int = 65536,
     max_redirects: int = 5,
+    extra_headers: dict[str, str] | None = None,
 ) -> HlsOutcome:
     """Проверить HLS: playlist, варианты качества, первый сегмент.
 
     Ошибки и истечение токенов проявляются на этапе сегмента — поэтому
     получение сегмента обязательно для подтверждения работоспособности.
+    ``extra_headers`` (например, браузерный User-Agent, issue #18)
+    применяются ко всем запросам уровня.
     """
     outcome = HlsOutcome()
 
-    response = await fetch(client, url, max_bytes=max_bytes, max_redirects=max_redirects)
+    response = await fetch(
+        client,
+        url,
+        max_bytes=max_bytes,
+        max_redirects=max_redirects,
+        extra_headers=extra_headers,
+    )
     if response.error_code:
         outcome.error_code = response.error_code
         outcome.error_message = response.error_message
@@ -177,7 +195,11 @@ async def check_hls(
 
     # Получаем media playlist (либо сам URL — media).
     media_response = await fetch(
-        client, media_url, max_bytes=max_bytes, max_redirects=max_redirects
+        client,
+        media_url,
+        max_bytes=max_bytes,
+        max_redirects=max_redirects,
+        extra_headers=extra_headers,
     )
     if media_response.error_code:
         outcome.error_code = media_response.error_code
@@ -207,12 +229,14 @@ async def check_hls(
 
     segment_url = segments[0]
     outcome.segment_url = segment_url
+    segment_headers = dict(extra_headers) if extra_headers else {}
+    segment_headers["Range"] = f"bytes=0-{segment_max_bytes - 1}"
     segment_response = await fetch(
         client,
         segment_url,
         max_bytes=segment_max_bytes,
         max_redirects=max_redirects,
-        extra_headers={"Range": f"bytes=0-{segment_max_bytes - 1}"},
+        extra_headers=segment_headers,
     )
     if segment_response.error_code:
         outcome.error_code = segment_response.error_code

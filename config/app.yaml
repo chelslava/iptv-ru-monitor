@@ -25,6 +25,12 @@ check:
   ffprobe_timeout_seconds: 30.0
   playback_duration_seconds: 10.0
   user_agent: "iptv-ru-monitor/0.1"
+  # UA-fallback (issue #18): при http 401/403/444 — повтор с браузерным UA.
+  # ~15% каталога отвечало 403 плеерному агенту (замер 2026-11-09); такие
+  # потоки публикуются с директивами #EXTVLCOPT/#KODIPROP (VLC/Kodi);
+  # TiviMate задаёт UA настройкой плейлиста — рекомендация в README.
+  ua_fallback: true
+  browser_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
   # DVR-проба Flussonic (issue #10): включена в безопасном скоупе —
   # только для approved-потоков (~100 шт., по 2 запроса после успешного
   # базового чека). Собирает dvr/dvr_hours в историю; при накоплении

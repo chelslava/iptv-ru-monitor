@@ -25,6 +25,10 @@ class M3UEntry:
     catchup: str | None = None
     catchup_days: int | None = None
     catchup_source: str | None = None
+    # User-Agent (issue #18): сервер требует браузерный UA. Директивы
+    # #EXTVLCOPT/#KODIPROP понимают VLC/Kodi; TiviMate задаёт UA
+    # по-плейлистно (настройка плейлиста), по-канальному не умеет.
+    http_user_agent: str | None = None
 
 
 def _escape(value: str) -> str:
@@ -121,6 +125,9 @@ def render_m3u(entries: list[M3UEntry], *, epg_url: str | None = None) -> str:
         if entry.group_title:
             attrs += f' group-title="{_escape(entry.group_title)}"'
         lines.append(f"#EXTINF:-1{attrs},{_escape(entry.name)}")
+        if entry.http_user_agent:
+            lines.append(f"#EXTVLCOPT:http-user-agent={entry.http_user_agent}")
+            lines.append(f"#KODIPROP:User-Agent={entry.http_user_agent}")
         lines.append(entry.url)
     lines.append("")  # завершающий перевод строки
     return "\n".join(lines)

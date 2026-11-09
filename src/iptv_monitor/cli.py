@@ -618,6 +618,18 @@ def run_build(
         if hours:
             dvr_by_stream[sid] = hours
 
+    # UA-требование по последней успешной проверке (issue #18): если сервер
+    # отдал контент только браузерному User-Agent, в плейлист добавляются
+    # директивы #EXTVLCOPT/#KODIPROP (VLC/Kodi); последний успех сбрасывает.
+    ua_required_by_stream: dict[str, bool] = {}
+    for sid, results in grouped.items():
+        ordered = sorted(results, key=lambda r: r.checked_at)
+        for r in reversed(ordered):
+            if r.is_success():
+                if r.ua_required:
+                    ua_required_by_stream[sid] = True
+                break
+
     # Жизненный цикл (issue #8): N провалов подряд — stale, 2N — автодeny.
     lifecycle_cfg = settings.lifecycle
     lifecycle = {
@@ -689,6 +701,9 @@ def run_build(
                 entry.catchup = "flussonic"
                 entry.catchup_days = hours
                 entry.catchup_source = flussonic_catchup_source(sel.stream.url)
+            # UA-директивы для потоков, требующих браузерный UA (issue #18).
+            if ua_required_by_stream.get(sel.stream.stream_id):
+                entry.http_user_agent = settings.check.browser_user_agent
         assign_channel_numbers(entries, overrides=country_profile.channel_numbers)
         (dist_country / playlist.filename).write_text(
             render_m3u(entries, epg_url=country_profile.epg_filename),
@@ -721,7 +736,14 @@ def run_build(
     # Каталоги каналов и потоков.
     country_channels = [c for c in channels if c.country == country]
     write_json(dist_country / "channels.json", channels_catalog(country_channels))
-    write_json(dist_country / "streams.json", streams_catalog(default_selection))
+    selection_ids = {s.stream.stream_id for s in default_selection}
+    write_json(
+        dist_country / "streams.json",
+        streams_catalog(
+            default_selection,
+            ua_required={sid: True for sid in ua_required_by_stream if sid in selection_ids},
+        ),
+    )
 
     # XMLTV, если есть сопоставленные программы.
     programmes: list[EpgProgramme] = []

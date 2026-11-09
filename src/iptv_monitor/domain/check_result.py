@@ -51,6 +51,10 @@ class CheckResult(BaseModel):
     dvr: bool | None = None
     dvr_hours: int | None = None
 
+    # UA-fallback (issue #18): сервер требует браузерный User-Agent —
+    # проверка прошла после повтора с ним (check.ua_fallback).
+    ua_required: bool = False
+
     check_version: str = __version__
 
     def is_success(self) -> bool:

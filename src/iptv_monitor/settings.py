@@ -51,6 +51,16 @@ class CheckSettings(BaseModel):
     ffprobe_timeout_seconds: float = 30.0
     playback_duration_seconds: float = 10.0
     user_agent: str = "iptv-ru-monitor/0.1"
+    # UA-fallback (issue #18): при http 401/403/444 — повторная попытка с
+    # браузерным User-Agent; серверы, отдающие 403 плеерному агенту, часто
+    # работают с браузерным (~15% каталога, измерено 2026-11-09).
+    # Рабочий UA фиксируется в CheckResult.ua_required и попадает
+    # в M3U как #EXTVLCOPT/#KODIPROP.
+    ua_fallback: bool = True
+    browser_user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    )
     # DVR-проба Flussonic (issue #10): catchup-атрибуты в плейлисте.
     # dvr_probe_scope: «approved» — только подтверждённые потоки
     # (два запроса на поток лишь для ~100 штук), «all» — все прошедшие HLS.

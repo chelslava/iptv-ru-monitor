@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 LEVELS = ("http", "hls", "ffprobe", "playback")
 DEFAULT_LEVELS: tuple[str, ...] = ("http", "hls")
 
+# Коды ответов, типичные для блока по User-Agent (issue #18):
+# 401/403 — авторизация/запрет, 444 — nginx «закрыть без ответа».
+_UA_BLOCK_STATUSES = frozenset({401, 403, 444})
+
 
 def parse_levels(spec: str) -> tuple[str, ...]:
     """Разобрать спецификацию уровней 'http,hls' с проверкой имён."""
@@ -92,12 +96,33 @@ async def check_stream(
         max_bytes=settings.check.head_bytes,
         max_redirects=settings.check.max_redirects,
     )
+
+    code, message = classify_http(http_result)
+    if (
+        code == CheckErrorCode.HTTP_4XX
+        and http_result.status in _UA_BLOCK_STATUSES
+        and settings.check.ua_fallback
+    ):
+        # UA-fallback (issue #18): 401/403/444 часто означают блок по
+        # User-Agent, а не мёртвый поток — повторяем с браузерным UA.
+        # ~15% каталога отвечало 403 (измерено 2026-11-09).
+        retry = await fetch(
+            client,
+            stream.url,
+            max_bytes=settings.check.head_bytes,
+            max_redirects=settings.check.max_redirects,
+            extra_headers={"User-Agent": settings.check.browser_user_agent},
+        )
+        if classify_http(retry)[0] is None:
+            http_result = retry
+            result.ua_required = True
+            code, message = None, None
+
     result.http_status = http_result.status or None
     result.dns_ok = http_result.dns_ok
     result.tls_ok = http_result.tls_ok
     result.startup_time_ms = http_result.elapsed_ms or None
 
-    code, message = classify_http(http_result)
     if code is not None:
         result.error_code = code
         result.error_message = redact_text(message or "")
@@ -105,12 +130,17 @@ async def check_stream(
 
     # Уровень 2 — HLS.
     if "hls" in level_set and _hls_expected(stream, http_result.headers.get("content-type", "")):
+        # Для потоков с UA-fallback весь уровень ходит с браузерным UA (issue #18).
+        ua_headers: dict[str, str] | None = None
+        if result.ua_required:
+            ua_headers = {"User-Agent": settings.check.browser_user_agent}
         hls = await check_hls(
             stream.url,
             client,
             max_bytes=max(settings.check.head_bytes * 4, 262144),
             segment_max_bytes=settings.check.head_bytes,
             max_redirects=settings.check.max_redirects,
+            extra_headers=ua_headers,
         )
         result.playlist_ok = hls.playlist_ok
         result.first_segment_ok = hls.first_segment_ok
@@ -129,6 +159,7 @@ async def check_stream(
                 client,
                 max_bytes=max(settings.check.head_bytes * 4, 262144),
                 max_redirects=settings.check.max_redirects,
+                extra_headers=ua_headers,
             )
             result.dvr = dvr.ok
             result.dvr_hours = dvr.hours if dvr.ok else None

@@ -35,6 +35,7 @@
       ]
     },
     "error_message": {"type": ["string", "null"], "description": "Секреты отредактированы"},
+    "ua_required": {"type": "boolean", "description": "Сервер требует браузерный User-Agent (issue #18)"},
     "check_version": {"type": "string"}
   }
 }
