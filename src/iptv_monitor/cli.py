@@ -31,6 +31,7 @@ from .filtering import (
     decide_publication,
     find_candidates,
     load_approved_ids,
+    order_streams_for_approval,
     select_streams,
 )
 from .filtering.country_profiles import SelectedStream
@@ -183,6 +184,7 @@ def run_check(
     country_code: str | None = None,
     rotate_offset: int | None = None,
     rotate_parts: int | None = None,
+    order: str = "catalog",
     client: httpx.AsyncClient | None = None,
 ) -> list[CheckResult]:
     """Проверить потоки и записать историю в хранилище."""
@@ -192,7 +194,30 @@ def run_check(
         if not streams:
             raise click.ClickException(f"stream not found: {stream_id}")
     streams = [s for s in streams if s.enabled]
-    if rotate_parts is not None and rotate_parts > 1 and stream_id is None:
+    if order == "approval" and stream_id is None:
+        # Приоритетная очередь (волна 3): готовые к кандидату потоки — из
+        # ВСЕГО каталога (сегмент есть, второй точки наблюдения нет);
+        # хвост — ротационный срез (issues #16, #17). Пока готовые не
+        # исчерпаются, ротация дозирует только хвост.
+        storage = create_storage(settings)
+        grouped: dict[str, list[CheckResult]] = {}
+        for result in storage.load():
+            grouped.setdefault(result.stream_id, []).append(result)
+        storage.close()
+        approved = load_approved_ids(settings.state_dir)
+        ready = order_streams_for_approval(
+            streams, grouped, approved, probe_location=probe_location
+        )
+        ready_ids = {s.stream_id for s in ready}
+        tail = streams
+        if rotate_parts is not None and rotate_parts > 1:
+            try:
+                tail = apply_rotation(streams, rotate_offset or 0, rotate_parts)
+            except ValueError as exc:
+                raise click.ClickException(str(exc)) from exc
+        streams = ready + [s for s in tail if s.stream_id not in ready_ids]
+        click.echo(f"Очередь approval: готовых {len(ready)}, хвост {len(streams) - len(ready)}")
+    elif rotate_parts is not None and rotate_parts > 1 and stream_id is None:
         # Ротация каталога (issues #16, #17): срез до лимита — лимит лишь
         # ограничивает объём работы внутри уже выбранного среза.
         try:
@@ -910,6 +935,12 @@ def discover(settings: AppSettings) -> None:
     default=None,
     help="Число слотов ротации; >= 2 включает stride-срез каталога (issues #16/#17)",
 )
+@click.option(
+    "--order",
+    type=click.Choice(["catalog", "approval"]),
+    default="catalog",
+    help="catalog — порядок каталога; approval — готовые к кандидату первыми (волна 3)",
+)
 @click.pass_obj
 def check(
     settings: AppSettings,
@@ -920,6 +951,7 @@ def check(
     country_code: str | None,
     rotate_offset: int | None,
     rotate_parts: int | None,
+    order: str,
 ) -> None:
     """Проверить потоки и записать историю."""
     run_check(
@@ -931,6 +963,7 @@ def check(
         country_code=country_code,
         rotate_offset=rotate_offset,
         rotate_parts=rotate_parts,
+        order=order,
     )
 
 

@@ -212,3 +212,90 @@ def test_candidates_to_dicts_roundtrip() -> None:
     assert data[0]["channel"] == "Канал"
     assert data[0]["score"] == 88.5
     assert data[0]["probe_locations"] == ["github-runner", "home-ru"]
+
+
+# --- волна 3: приоритетная очередь approval -------------------------------
+
+
+def _approval_stream(n: int) -> Stream:
+    from iptv_monitor.domain.enums import StreamProtocol
+    from iptv_monitor.domain.stream import Stream, make_stream_id
+
+    url = f"https://ord{n}.example/live.m3u8"
+    return Stream(
+        stream_id=make_stream_id(url),
+        channel_id=f"ru-ord{n}",
+        url=url,
+        protocol=StreamProtocol.HLS,
+        source_id="test",
+    )
+
+
+def test_order_streams_approval_tiers() -> None:
+    """Готовые к кандидату (сегмент есть, второй точки нет) идут первыми."""
+    from iptv_monitor.filtering.candidates import order_streams_for_approval
+
+    s_ready, s_plain, s_approved = (
+        _approval_stream(0),
+        _approval_stream(1),
+        _approval_stream(2),
+    )
+    approved = {s_approved.stream_id}
+    from iptv_monitor.domain.check_result import CheckResult
+
+    history = {
+        s_ready.stream_id: [
+            CheckResult(
+                stream_id=s_ready.stream_id,
+                probe_location="github-runner",
+                http_status=200,
+                playlist_ok=True,
+                first_segment_ok=True,
+            )
+        ],
+        s_approved.stream_id: [
+            CheckResult(
+                stream_id=s_approved.stream_id,
+                probe_location="github-runner",
+                http_status=200,
+                playlist_ok=True,
+                first_segment_ok=True,
+            )
+        ],
+    }
+    ordered = order_streams_for_approval(
+        [s_plain, s_approved, s_ready], history, approved, probe_location="home-ru"
+    )
+    assert ordered[0].stream_id == s_ready.stream_id  # готовый — первый
+    # подтверждённый и без сегмента — в хвосте (каталожный порядок)
+    assert {ordered[1].stream_id, ordered[2].stream_id} == {
+        s_plain.stream_id,
+        s_approved.stream_id,
+    }
+
+
+def test_order_streams_deterministic_by_successes() -> None:
+    """Больше успешных проверок извне — выше; tie — по stream_id."""
+    from iptv_monitor.domain.check_result import CheckResult
+    from iptv_monitor.filtering.candidates import order_streams_for_approval
+
+    a, b = _approval_stream(0), _approval_stream(1)
+
+    def _ok(n: int) -> list[CheckResult]:
+        return [
+            CheckResult(
+                stream_id=n,
+                probe_location="github-runner",
+                http_status=200,
+                playlist_ok=True,
+                first_segment_ok=True,
+            )
+        ]
+
+    history = {
+        a.stream_id: _ok(a.stream_id),
+        b.stream_id: _ok(b.stream_id) * 2,
+    }
+    ordered = order_streams_for_approval([a, b], history, set(), probe_location="home-ru")
+    # оба готовы; больше успешных проверок извне — выше
+    assert [s.stream_id for s in ordered] == [b.stream_id, a.stream_id]

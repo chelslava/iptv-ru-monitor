@@ -54,12 +54,13 @@ mkdir -p "$(dirname "$RESULT")"
 rm -f "$RESULT"
 
 uv run iptv-monitor discover
-echo "==> [$LABEL] Проверка потоков (уровни: $LEVELS, лимит: $LIMIT, ротация: слот $ROTATE_SLOT из $ROTATE_PARTS)"
+echo "==> [$LABEL] Проверка потоков (уровни: $LEVELS, лимит: $LIMIT, ротация: слот $ROTATE_SLOT из $ROTATE_PARTS, порядок: approval)"
 uv run iptv-monitor check \
     --levels "$LEVELS" \
     --limit "$LIMIT" \
     --rotate-offset "$ROTATE_SLOT" \
     --rotate-parts "$ROTATE_PARTS" \
+    --order approval \
     --probe-location "$LABEL" \
     --country RU
 

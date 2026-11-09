@@ -121,3 +121,50 @@ def candidates_to_dicts(candidates: Iterable[ApprovalCandidate]) -> list[dict[st
         }
         for c in candidates
     ]
+
+
+def order_streams_for_approval(
+    streams: list[Stream],
+    grouped: dict[str, list[CheckResult]],
+    approved: set[str],
+    *,
+    probe_location: str | None = None,
+) -> list[Stream]:
+    """Приоритетная очередь проверок (волна 3, roadmap).
+
+    Tier 1 — потоки, готовые стать кандидатами: успех с сегментом из другой
+    точки наблюдения, ещё не подтверждены. Именно им не хватает второй
+    точки наблюдения — home-ru закрывает потребность первой же успешной
+    проверкой. Сортировка: успешных проверок больше → выше, tie — по
+    stream_id (детерминизм).
+
+    Tier 2 — остальные в исходном (ротационном) порядке: покрытие каталога
+    продолжается, когда готовые исчерпаны.
+    """
+    ready: list[Stream] = []
+    rest: list[Stream] = []
+    for stream in streams:
+        if stream.stream_id in approved:
+            rest.append(stream)
+            continue
+        others = [
+            r
+            for r in grouped.get(stream.stream_id, [])
+            if probe_location is None or r.probe_location != probe_location
+        ]
+        has_segment_elsewhere = any(r.is_success() and r.first_segment_ok for r in others)
+        if has_segment_elsewhere:
+            ready.append(stream)
+        else:
+            rest.append(stream)
+
+    def _success_key(stream: Stream) -> tuple[int, str]:
+        successes = sum(
+            1
+            for r in grouped.get(stream.stream_id, [])
+            if r.is_success() and (probe_location is None or r.probe_location != probe_location)
+        )
+        return (-successes, stream.stream_id)
+
+    ready.sort(key=_success_key)
+    return ready + rest
