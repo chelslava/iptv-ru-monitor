@@ -2,12 +2,62 @@
 # Дополняется автоматически кандидатами (iptv-monitor candidates --apply)
 # и вручную; детали — data/state/candidates.json и PR approve-candidates.
 stream_ids:
+  - 007eb91757ddf62a
+  - 00f1acf1b5763fb9
+  - 014cb70f47d0ab11
+  - 073f03c5ba6d1c49
+  - 08487755e3713336
+  - 0da24b72ccfa525f
   - 144e5acc08c7235f
+  - 1456c497c24d0df8
+  - 1c152a4e82999e34
+  - 2143ede26cffddfe
   - 2328906d950828ab
+  - 37136daecbc9a701
   - 3b04bb4230bb7838
+  - 4238d2230354b13f
+  - 46350426d728cce0
+  - 46d4a65b7b5274a3
+  - 46d78316c48d2527
+  - 4730a6fa74ac53c1
   - 4f0845fd1842583d
+  - 50c4aa209c7e74c7
   - 56555a9506001e27
+  - 59c834507da2343a
+  - 5cddeba55350a2a7
+  - 5f5b071c371939ab
+  - 643b1e19d113320b
+  - 6a7c20c89878fac2
+  - 6b7d89716f12e12f
+  - 6c0563abb975917e
+  - 6db0e1732cf58e9c
+  - 71512bfdc63778dd
+  - 792cbbadc8c00b1d
+  - 7cfaef0ff6902ead
   - 7d48c38cb88449e7
   - 82df8379237200ac
+  - 8b51f6767f4ef2f8
+  - 94bfee9b8e2b58b3
+  - 97108a341e679e64
   - 9934f80007e1ebb7
+  - 99823e8c2f612d0c
+  - 9d62374124f558a2
+  - a59ce824124367a7
+  - ac18726c7e8aaf74
+  - acbb59afab9ee91f
+  - b0e0566e81dc353c
   - c0f0ea4cf8a5f237
+  - c79ead48aad6e382
+  - cdabad1777fe188f
+  - d109b44ce8b156d6
+  - d8b65540c472f6f6
+  - dc3b9e56f9bd8c44
+  - df0c5262154ac8db
+  - e864a36b68548636
+  - ea8fbb31d587f048
+  - ec25ff1f6b5442d6
+  - f10f439a40753360
+  - f620ba9ca1974eca
+  - fa69498ed4d3f9a4
+  - fb941c352d4df1a5
+  - fbd585df32defc34
