@@ -62,9 +62,27 @@ MSYS_NO_PATHCONV=1 schtasks /Create /F /SC DAILY /ST 03:40 \
   /TR "D:\Repo\iptv-ru-monitor\scripts\ru_probe_task.cmd"
 ```
 
-Лог: `data/state/home-ru-task.log`. Задача выполняется под текущим
-пользователем: если ПК выключен в 03:40, прогон пропускается — история
-накопится со следующих ночей.
+Лог: `data/state/home-ru-task.log`. Особенности запуска (проверено
+2026-11-09 на ноутбуке):
+
+- задача пересоздана с `AllowStartIfOnBatteries` — флаг «не запускать от
+  батареи» навсегда ставил её в очередь (ноутбук на батарее = всегда
+  «от батареи»);
+- `StartWhenAvailable` — пропущенный по выключению ПК прогон стартует
+  при включении;
+- докат при входе в систему: ярлык в автозагрузке пользователя
+  (`shell:startup\iptv-ru-monitor home-ru.lnk`) — без прав администратора;
+- защита от дублей: скрипт пропускает прогон, если предыдущий был менее
+  8 часов назад (обход — `IPTV_FORCE=1`);
+- опционально (нужен админ, один раз): перевести задачу в S4U-режим,
+  чтобы работала без активного входа:
+
+  ```powershell
+  $t = Get-ScheduledTask -TaskName 'iptv-ru-monitor home-ru probe'
+  $t.Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+  $t.Settings.WakeToRun = $true
+  Set-ScheduledTask -InputObject $t
+  ```
 
 Ручной прогон:
 

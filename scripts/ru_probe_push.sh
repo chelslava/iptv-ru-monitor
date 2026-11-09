@@ -22,6 +22,15 @@ export PATH="$HOME/.local/bin:$PATH"
 
 LEVELS="${IPTV_LEVELS:-http,hls}"
 LIMIT="${IPTV_LIMIT:-300}"
+
+# Защита от дублей: пропуск, если прогон был менее 8 часов назад
+# (ежедневный триггер + catch-up по входу в систему могут сработать оба).
+# Обход: IPTV_FORCE=1 bash scripts/ru_probe_push.sh
+RESULT_GUARD="deploy/vds/data/state/checks-${IPTV_PROBE_LABEL:-home-ru}.jsonl"
+if [[ "${IPTV_FORCE:-0}" != "1" && -f "$RESULT_GUARD" ]]    && [[ -n "$(find "$RESULT_GUARD" -mmin -480 2>/dev/null)" ]]; then
+    echo "Прогон был менее 8 часов назад — пропуск (IPTV_FORCE=1 для обхода)"
+    exit 0
+fi
 BRANCH="${PROBE_BRANCH:-probe/ru}"
 LABEL="${IPTV_PROBE_LABEL:-home-ru}"
 STAMP="$(date -u +%Y%m%d-%H%M)"
