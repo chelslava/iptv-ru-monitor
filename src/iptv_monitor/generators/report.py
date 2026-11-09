@@ -158,6 +158,7 @@ def render_index_html(
     last_generated: str,
     stats: dict[str, Any] | None = None,
     top_channels: list[dict[str, Any]] | None = None,
+    catalog_path: str | None = None,
 ) -> str:
     """Статическая страница: счётчики, топ каналов, артефакты (issue #9)."""
     rows = "".join(
@@ -172,6 +173,114 @@ def render_index_html(
 
     stats_block = ""
     top_block = ""
+    catalog_block = ""
+    if catalog_path:
+        catalog_block = f"""
+<h2>Каталог каналов</h2>
+<p>Поиск по каталогу и состоянию потоков. Источники данных:
+<a href="{html.escape(catalog_path)}">channels.json</a>,
+<a href="{html.escape(report_path)}">report.json</a>.</p>
+<p>
+  <input id="catalog-search" type="search" placeholder="Поиск канала…"
+         autocomplete="off" style="padding:.4rem .6rem; min-width: 16rem;">
+  <select id="catalog-category" style="padding:.4rem .6rem;">
+    <option value="">Все категории</option>
+  </select>
+  <span id="catalog-count" style="color:#57606a;"></span>
+</p>
+<table id="catalog-table">
+<thead><tr><th></th><th>Канал</th><th>Категория</th><th>Статус</th><th>Score</th>
+<th>Uptime 30д</th></tr></thead>
+<tbody id="catalog-body"><tr><td colspan="6">Загрузка каталога…</td></tr></tbody>
+</table>
+<script>
+(function () {{
+  "use strict";
+  var LEVEL_LABEL = {{
+    "excellent": "excellent", "good": "good", "unstable": "unstable",
+    "failed": "failed", "insufficient_data": "нет данных"
+  }};
+  function esc(s) {{
+    var d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+  }}
+  Promise.all([
+    fetch("{html.escape(catalog_path)}").then(function (r) {{ return r.json(); }}),
+    fetch("{html.escape(report_path)}").then(function (r) {{ return r.json(); }})
+  ]).then(function (results) {{
+    var channels = results[0] || [];
+    var reportByChannel = {{}};
+    (results[1] && results[1].streams || []).forEach(function (s) {{
+      // лучший поток канала: включённый или с максимальным score
+      var prev = reportByChannel[s.channel_id];
+      if (!prev || (s.included && !prev.included) ||
+          ((s.score || 0) > (prev.score || 0))) {{
+        reportByChannel[s.channel_id] = s;
+      }}
+    }});
+    var seenCategories = {{}};
+    var rows = channels.map(function (c) {{
+      if (c.category && !seenCategories[c.category]) seenCategories[c.category] = true;
+      var r = reportByChannel[c.channel_id] || {{}};
+      return {{
+        name: c.name || "",
+        category: c.category || "",
+        logo: c.logo_url || "",
+        level: r.level || null,
+        score: r.score,
+        uptime: r.uptime_30d_percent
+      }};
+    }});
+    var catSelect = document.getElementById("catalog-category");
+    Object.keys(seenCategories).sort().forEach(function (cat) {{
+      var opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat;
+      catSelect.appendChild(opt);
+    }});
+    var body = document.getElementById("catalog-body");
+    var search = document.getElementById("catalog-search");
+    var catFilter = catSelect;
+    var counter = document.getElementById("catalog-count");
+    function render() {{
+      var q = search.value.trim().toLowerCase();
+      var cat = catFilter.value;
+      var shown = 0;
+      var html = "";
+      for (var i = 0; i < rows.length && shown < 500; i++) {{
+        var row = rows[i];
+        if (q && row.name.toLowerCase().indexOf(q) === -1) continue;
+        if (cat && row.category !== cat) continue;
+        shown++;
+        var logo = row.logo
+          ? '<img src="' + esc(row.logo) + '" alt="" width="24" height="24" loading="lazy">'
+          : "";
+        var label = row.level ? (LEVEL_LABEL[row.level] || row.level) : "";
+        var badge = row.level
+          ? '<span class="badge badge-' + esc(row.level) + '">' + esc(label) + "</span>"
+          : "—";
+        html += "<tr><td>" + logo + "</td><td>" + esc(row.name) + "</td><td>" +
+          esc(row.category) + "</td><td>" + badge + "</td><td>" +
+          (row.score == null ? "—" : row.score) + "</td><td>" +
+          (row.uptime == null ? "—" : row.uptime + "%") + "</td></tr>";
+      }}
+      body.innerHTML = html || '<tr><td colspan="6">Ничего не найдено</td></tr>';
+      counter.textContent = "показано " + shown + " из " + rows.length;
+    }}
+    search.addEventListener("input", render);
+    catFilter.addEventListener("change", render);
+    render();
+  }});
+}})();
+</script>
+<style>
+  .badge {{ padding: .1rem .5rem; border-radius: 999px; font-size: .8rem; }}
+  .badge-excellent, .badge-good {{ background: #dafbe1; color: #116329; }}
+  .badge-unstable {{ background: #fff8c5; color: #7d4e00; }}
+  .badge-failed {{ background: #ffebe9; color: #82071e; }}
+</style>
+"""
     if stats:
         catalog: dict[str, Any] = stats.get("catalog") or {}
         playlist: dict[str, Any] = stats.get("playlist") or {}
@@ -253,6 +362,7 @@ def render_index_html(
 <tbody>{rows}</tbody>
 </table>
 {top_block}
+{catalog_block}
 <p>
   <a href="{html.escape(report_path)}">report.json</a> ·
   <a href="{html.escape(report_path.replace("report.json", "stats.json"))}">stats.json</a> ·

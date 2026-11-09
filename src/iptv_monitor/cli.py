@@ -873,6 +873,7 @@ def run_build(
             last_generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
             stats=stats,
             top_channels=top_channels,
+            catalog_path=f"{country.lower()}/channels.json",
         ),
         encoding="utf-8",
     )

@@ -80,3 +80,29 @@ def test_channels_without_tvg_id_excluded_from_xmltv() -> None:
     epg_channels, programmes = parse_xmltv(text)
     assert epg_channels == []
     assert programmes == []
+
+
+def test_index_html_includes_catalog_search() -> None:
+    """Статус-страница содержит поиск по каталогу (волна 3)."""
+    from iptv_monitor.generators.report import render_index_html
+
+    page = render_index_html(
+        site_title="iptv-ru-monitor — RU",
+        playlists=[
+            {"title": "Основной", "filename": "russia.m3u", "url": "ru/russia.m3u", "included": 5}
+        ],
+        report_path="ru/report.json",
+        last_generated="2026-11-10 08:00",
+        catalog_path="ru/channels.json",
+    )
+    assert 'id="catalog-search"' in page
+    assert "channels.json" in page
+    assert "report.json" in page
+    # без catalog_path секции нет (старое поведение)
+    page_min = render_index_html(
+        site_title="x",
+        playlists=[],
+        report_path="ru/report.json",
+        last_generated="2026-11-10 08:00",
+    )
+    assert 'id="catalog-search"' not in page_min
