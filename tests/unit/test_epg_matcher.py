@@ -71,3 +71,101 @@ def test_xmltv_fixture_parses() -> None:
     assert len(channels) == 3
     assert len(programmes) == 2  # запись с битым временем пропущена
     assert programmes[0].title == "Новости"
+
+
+# --- issue #22: fuzzy, country-scope алиасов, детерминизм дублей ----------
+
+
+def _epg(cid: str, *names: str) -> EpgChannelData:
+    return EpgChannelData(id=cid, display_names=list(names))
+
+
+def test_fuzzy_match_above_threshold() -> None:
+    """Имя с опечаткой/суффиксом находит EPG-канал методом FUZZY."""
+    epg = [_epg("1tv", "Первый канал")]
+    matches = match_epg([_channel("Первый канав")], epg, AliasIndex([]), fuzzy_threshold=85.0)
+    assert len(matches) == 1
+    assert matches[0].method == MatchMethod.FUZZY
+    assert matches[0].tvg_id == "1tv"
+    assert matches[0].confidence <= 0.65  # ниже моста имён
+
+
+def test_fuzzy_below_threshold_no_match() -> None:
+    epg = [_epg("1tv", "Первый канал")]
+    matches = match_epg(
+        [_channel("Совершенно другое имя")], epg, AliasIndex([]), fuzzy_threshold=85.0
+    )
+    assert matches == []
+
+
+def test_fuzzy_disabled_by_default() -> None:
+    """Без fuzzy_threshold (> 0) этап неактивен — старое поведение."""
+    epg = [_epg("1tv", "Первый канал")]
+    matches = match_epg([_channel("Первый канав")], epg, AliasIndex([]))
+    assert matches == []
+
+
+def test_fuzzy_ambiguous_candidates_skipped() -> None:
+    """Два EPG-канала с близким score — неоднозначно, матч не применяется."""
+    epg = [
+        _epg("sport-a", "Спорт Плюс"),
+        _epg("sport-b", "Спорт Плус"),  # почти то же имя
+    ]
+    ambiguous: list[str] = []
+    matches = match_epg(
+        [_channel("Спорт Плюсс")],
+        epg,
+        AliasIndex([]),
+        fuzzy_threshold=85.0,
+        ambiguous=ambiguous,
+    )
+    assert matches == []
+    assert ambiguous == ["ru-спорт-плюсс"]
+
+
+def test_duplicate_display_names_deterministic() -> None:
+    """Дубли display-name: выбор детерминирован (частота, потом id)."""
+    epg = [
+        _epg("zzz-dup", "Канал Д", "Канал Д"),
+        _epg("aaa-dup", "Канал Д"),
+    ]
+    matches = match_epg([_channel("Канал Д")], epg, AliasIndex([]))
+    assert len(matches) == 1
+    # «zzz-dup» ссылается на имя дважды — побеждает по частоте,
+    # несмотря на больший id
+    assert matches[0].tvg_id == "zzz-dup"
+
+
+def test_duplicate_display_names_tie_broken_by_id() -> None:
+    epg = [
+        _epg("bbb-dup", "Канал Д"),
+        _epg("aaa-dup", "Канал Д"),
+    ]
+    matches = match_epg([_channel("Канал Д")], epg, AliasIndex([]))
+    assert matches[0].tvg_id == "aaa-dup"
+
+
+def test_alias_country_scope() -> None:
+    """RU-алиас не срабатывает для одноимённого канала другой страны."""
+    ru_rule = AliasRule(name="Первый", tvg_id="1tv.ru", country="RU")
+    epg = [_epg("1tv.ru", "Первый канал")]
+    ua_channel = Channel(
+        channel_id="ua-pershyi",
+        name="Первый",
+        country="UA",
+        tvg_id=None,
+    )
+    matches = match_epg([ua_channel], epg, AliasIndex([ru_rule]))
+    assert matches == []
+    # а для RU-канала работает
+    matches_ru = match_epg([_channel("Первый")], epg, AliasIndex([ru_rule]))
+    assert len(matches_ru) == 1
+    assert matches_ru[0].method == MatchMethod.ALIAS
+
+
+def test_alias_global_rule_works_for_any_country() -> None:
+    """Правило без страны — глобальное."""
+    rule = AliasRule(name="Евроньюс", tvg_id="euronews", country=None)
+    epg = [_epg("euronews", "Euronews")]
+    matches = match_epg([_channel("Евроньюс")], epg, AliasIndex([rule]))
+    assert len(matches) == 1

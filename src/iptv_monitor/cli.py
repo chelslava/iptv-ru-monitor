@@ -21,6 +21,7 @@ from .checking.geo import detect_country_code
 from .discovery import create_adapter, fetch_all
 from .domain.channel import Channel
 from .domain.check_result import CheckResult, now_utc
+from .domain.enums import MatchMethod
 from .domain.stream import Stream
 from .filtering import (
     ApprovalCandidate,
@@ -66,6 +67,7 @@ from .normalization import normalize_discovered
 from .normalization.deduplication import deduplicate
 from .scoring import StreamScore, best_height, score_stream
 from .settings import (
+    AliasRule,
     AppSettings,
     available_countries,
     load_categories,
@@ -271,12 +273,15 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
     epg_sources = [s for s in load_epg_sources(settings.config_dir) if s.enabled]
     logos_cfg = load_logo_sources(settings.config_dir)
 
-    alias_rules = []
+    alias_rules: list[AliasRule] = []
     for code in available_countries(settings.config_dir):
         try:
-            alias_rules.extend(load_country(settings.config_dir, code).aliases)
+            country_aliases = load_country(settings.config_dir, code).aliases
         except FileNotFoundError:  # pragma: no cover - защита от гонки удаления
             continue
+        # Алиасы скоупятся страной профиля (issue #22): RU-правило не
+        # срабатывает для одноимённого канала другой страны.
+        alias_rules.extend(rule.model_copy(update={"country": code}) for rule in country_aliases)
     aliases = AliasIndex(alias_rules)
 
     matches: list = []
@@ -346,7 +351,14 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                 if not epg_channels:
                     continue
 
-                source_matches = match_epg(pending, ns_channels, aliases, bridge=bridge)
+                source_matches = match_epg(
+                    pending,
+                    ns_channels,
+                    aliases,
+                    bridge=bridge,
+                    fuzzy_threshold=settings.epg.fuzzy_threshold,
+                    ambiguous=ambiguous,
+                )
                 if not source_matches:
                     continue
                 matched_by_prefix: dict[str, set[str]] = {}
@@ -391,6 +403,9 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
                     logger.info("logo rejected: %s", logo.logo_url)
 
     logo_matches = match_logos(channels, logos_cfg.sources, logos_cfg.overrides)
+    # Неоднозначные fuzzy-кандидаты (issue #22): не применяются
+    # автоматически, накапливаются для отчёта.
+    ambiguous: list[str] = []
 
     if epg_sources or logo_matches:
         asyncio.run(_fetch())
@@ -448,12 +463,19 @@ def run_enrich(settings: AppSettings) -> dict[str, int]:
     applied_logos = sum(
         1 for logo in validated_logos if not _channel_logo_existed(channels, logo.channel_id)
     )
+    ambiguous_unique = len(set(ambiguous))
     click.echo(
         f"Enrich: EPG-совпадений {len(matches)} ({dict(by_method)}), "
+        f"fuzzy-неоднозначных {ambiguous_unique}, "
         f"логотипов прошло проверку {len(validated_logos)} из {len(logo_matches)}, "
         f"добавлено {applied_logos}, иконок из EPG {epg_icons_used}"
     )
-    return {"epg_matches": len(matches), "logos": applied_logos}
+    return {
+        "epg_matches": len(matches),
+        "logos": applied_logos,
+        "epg_fuzzy": by_method.get(MatchMethod.FUZZY.value, 0),
+        "epg_ambiguous": ambiguous_unique,
+    }
 
 
 def _channel_logo_existed(channels: list[Channel], channel_id: str) -> bool:

@@ -99,6 +99,15 @@ class ScoringSettings(BaseModel):
     min_checks: int = 5
 
 
+class EpgSettings(BaseModel):
+    """Настройки EPG-сопоставления (issue #22)."""
+
+    # Порог нечёткого сопоставления имён (token_sort_ratio, 0-100).
+    # 0 — fuzzy выключен. Неоднозначные кандидаты (разница топ-2 < 3
+    # балла) не применяются автоматически.
+    fuzzy_threshold: float = 85.0
+
+
 class GeoSettings(BaseModel):
     ip_info_url: str | None = None
 
@@ -115,6 +124,7 @@ class AppSettings(BaseModel):
     lifecycle: LifecycleSettings = Field(default_factory=LifecycleSettings)
     scoring: ScoringSettings = Field(default_factory=ScoringSettings)
     geo: GeoSettings = Field(default_factory=GeoSettings)
+    epg: EpgSettings = Field(default_factory=EpgSettings)
     config_dir: Path = _DEFAULT_CONFIG_DIR
 
     @property
@@ -141,7 +151,7 @@ def load_settings(config_dir: Path | None = None, **overrides: Any) -> AppSettin
 
     raw.setdefault("config_dir", config_dir)
     # Разделы app.yaml верхнего уровня.
-    for section in ("app", "paths", "check", "storage", "retention", "scoring", "geo"):
+    for section in ("app", "paths", "check", "storage", "retention", "scoring", "geo", "epg"):
         raw.setdefault(section, {})
 
     paths = raw["paths"]
@@ -285,6 +295,10 @@ class AliasRule(BaseModel):
     name: str
     tvg_id: str
     manual: bool = True
+    # Страна профиля, из которого загружено правило (заполняется при
+    # загрузке, issue #22): алиас срабатывает только для канала этой
+    # страны; None — правило глобальное.
+    country: str | None = None
 
 
 class CountryProfile(BaseModel):
