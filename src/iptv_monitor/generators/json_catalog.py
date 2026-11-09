@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ..domain.channel import Channel
 from ..filtering import SelectedStream
+from ..infrastructure.atomic import atomic_write_json
 
 
 def write_json(path: Path, payload: object) -> None:
-    """Записать JSON-файл с человекочитаемым форматированием."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump(payload, fh, ensure_ascii=False, indent=2)
+    """Записать JSON-файл атомарно с человекочитаемым форматированием (issue #20)."""
+    atomic_write_json(path, payload)
 
 
 def channels_catalog(channels: list[Channel]) -> list[dict[str, object]]:

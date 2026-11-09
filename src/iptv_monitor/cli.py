@@ -47,6 +47,7 @@ from .generators import (
 )
 from .history.lifecycle import analyze_lifecycle
 from .history.retention import prune_storage
+from .infrastructure.atomic import atomic_write_text
 from .infrastructure.http_client import create_client
 from .infrastructure.logging import setup_logging
 from .infrastructure.storage import JsonlStorage, SqliteStorage, create_storage
@@ -579,7 +580,7 @@ def run_candidates(
             ]
         )
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(header + "".join(f"  - {sid}\n" for sid in merged), encoding="utf-8")
+        atomic_write_text(path, header + "".join(f"  - {sid}\n" for sid in merged))
         click.echo(f"Подтверждено +{len(merged) - len(approved)} (всего {len(merged)})")
     return candidates
 
@@ -705,9 +706,9 @@ def run_build(
             if ua_required_by_stream.get(sel.stream.stream_id):
                 entry.http_user_agent = settings.check.browser_user_agent
         assign_channel_numbers(entries, overrides=country_profile.channel_numbers)
-        (dist_country / playlist.filename).write_text(
+        atomic_write_text(
+            dist_country / playlist.filename,
             render_m3u(entries, epg_url=country_profile.epg_filename),
-            encoding="utf-8",
         )
         if index == 0:
             default_selection = selected
@@ -753,7 +754,7 @@ def run_build(
             programmes = [EpgProgramme.model_validate(item) for item in json.load(fh)]
         if programmes:
             xmltv_text = render_xmltv(country_channels, programmes)
-            (dist_country / country_profile.epg_filename).write_text(xmltv_text, encoding="utf-8")
+            atomic_write_text(dist_country / country_profile.epg_filename, xmltv_text)
             click.echo(f"XMLTV: {len(programmes)} программ -> {country_profile.epg_filename}")
 
     # stats.json и дашборд (issue #9): сводка проекта + покрытие EPG плейлиста.
@@ -801,7 +802,8 @@ def run_build(
 
     # Индексная страница.
     settings.dist_dir.mkdir(parents=True, exist_ok=True)
-    (settings.dist_dir / "index.html").write_text(
+    atomic_write_text(
+        settings.dist_dir / "index.html",
         render_index_html(
             site_title=f"iptv-ru-monitor — {country_profile.name or country}",
             playlists=written,

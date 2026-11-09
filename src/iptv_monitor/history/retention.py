@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from ..domain.check_result import CheckResult, now_utc
+from ..infrastructure.atomic import atomic_write_text
 from ..infrastructure.storage.jsonl import JsonlStorage
 from ..infrastructure.storage.sqlite import SqliteStorage
 
@@ -51,9 +52,11 @@ def prune_storage(
             max_results_per_stream=max_results_per_stream,
         )
         if dropped:
-            storage.path.write_text(
+            # Атомарная перезапись (issue #20): обрыв посреди записи не
+            # оставляет урезанный checks.jsonl.
+            atomic_write_text(
+                storage.path,
                 "".join(line + "\n" for line in (r.model_dump_json() for r in kept)),
-                encoding="utf-8",
             )
         return dropped
 
