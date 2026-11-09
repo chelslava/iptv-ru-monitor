@@ -22,6 +22,7 @@ dist/
 # живут в CI-артефактах и ветках probe/ru, history/global — не в git).
 artifacts/
 probe/
+history/
 deploy/vds/data/state/*.jsonl
 
 # Runtime data (keep directory placeholders)
