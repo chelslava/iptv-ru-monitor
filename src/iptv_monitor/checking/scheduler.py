@@ -21,7 +21,7 @@ from ..infrastructure.logging import redact_text
 from ..settings import AppSettings
 from .ffprobe import probe_media
 from .geo import resolve_probe_location
-from .hls import check_hls
+from .hls import check_hls, probe_dvr
 from .http import classify_http
 from .playback import check_playback
 
@@ -102,6 +102,18 @@ async def check_stream(
             result.error_code = hls.error_code
             result.error_message = redact_text(hls.error_message or "")
             return result
+
+        # DVR-проба (issue #10): только после успешного базового чека,
+        # не более двух запросов; отключается в config (check.dvr_probe).
+        if settings.check.dvr_probe and hls.playlist_ok and hls.first_segment_ok and hls.media_url:
+            dvr = await probe_dvr(
+                hls.media_url,
+                client,
+                max_bytes=max(settings.check.head_bytes * 4, 262144),
+                max_redirects=settings.check.max_redirects,
+            )
+            result.dvr = dvr.ok
+            result.dvr_hours = dvr.hours if dvr.ok else None
 
     # Уровень 3 — медиапараметры.
     if "ffprobe" in level_set:

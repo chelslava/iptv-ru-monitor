@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  issues: write # метка ci-failing на roadmap при падении (issue #11)
 
 concurrency:
   group: check-ru
@@ -48,6 +49,24 @@ jobs:
             checks-ru.jsonl
           rm -f vds_ci_key
 
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Check RU (VDS)"
+            if [[ -f checks-ru.jsonl ]]; then
+              total=$(wc -l < checks-ru.jsonl)
+              ok=$(grep -c '"error_code":null' checks-ru.jsonl || true)
+              echo "Проверено: **$total**, успешно: **$ok**"
+              echo
+              echo '```'
+              grep -o '"error_code":"[a-z_0-9]*"' checks-ru.jsonl | sort | uniq -c | sort -rn | head -10
+              echo '```'
+            else
+              echo "VDS не сконфигурирован или проверка пропущена."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload check results
         if: env.VDS_HOST != ''
         uses: actions/upload-artifact@v4
@@ -56,3 +75,18 @@ jobs:
           path: checks-ru.jsonl
           retention-days: 30
           if-no-files-found: error
+
+      - name: Mark roadmap failing
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/4/labels" \
+            -f "labels[]=ci-failing" >/dev/null
+
+      - name: Clear roadmap failing label
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/4/labels/ci-failing" >/dev/null 2>&1 || true

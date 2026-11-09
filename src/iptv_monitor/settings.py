@@ -51,6 +51,9 @@ class CheckSettings(BaseModel):
     ffprobe_timeout_seconds: float = 30.0
     playback_duration_seconds: float = 10.0
     user_agent: str = "iptv-ru-monitor/0.1"
+    # DVR-проба Flussonic (issue #10): catchup-атрибуты в плейлисте.
+    # Выключено до стабилизации — включается здесь (true) после прогона.
+    dvr_probe: bool = False
 
 
 class StorageSettings(BaseModel):
@@ -62,6 +65,18 @@ class StorageSettings(BaseModel):
 class RetentionSettings(BaseModel):
     history_days: int = 90
     max_results_per_stream: int = 200
+
+
+class LifecycleSettings(BaseModel):
+    """Автодеградация мёртвых потоков (issue #8).
+
+    N провалов подряд (по всем точкам) — stale (публикуется с пометкой
+    в отчёте), 2N — автодeny (исключается из плейлиста). Один успех
+    сбрасывает счётчик.
+    """
+
+    stale_consecutive_failures: int = 6
+    deny_consecutive_failures: int = 12
 
 
 class ScoringSettings(BaseModel):
@@ -81,6 +96,7 @@ class AppSettings(BaseModel):
     check: CheckSettings = Field(default_factory=CheckSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     retention: RetentionSettings = Field(default_factory=RetentionSettings)
+    lifecycle: LifecycleSettings = Field(default_factory=LifecycleSettings)
     scoring: ScoringSettings = Field(default_factory=ScoringSettings)
     geo: GeoSettings = Field(default_factory=GeoSettings)
     config_dir: Path = _DEFAULT_CONFIG_DIR
@@ -353,6 +369,7 @@ __all__ = [
     "CountryPlaylist",
     "CountryProfile",
     "EpgSource",
+    "LifecycleSettings",
     "LogoOverride",
     "LogoSource",
     "NameBridgeSettings",

@@ -1,9 +1,10 @@
-"""Уровень 2 — проверка HLS: master/media playlist и первый сегмент."""
+"""Уровень 2 — проверка HLS: master/media playlist, первый сегмент, DVR-проба."""
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -69,6 +70,64 @@ def parse_media_playlist(text: str, base_url: str) -> list[str]:
 
 def looks_like_playlist(text: str) -> bool:
     return text.lstrip().startswith("#EXTM3U")
+
+
+def flussonic_timeshift_url(media_url: str, utc: int) -> str:
+    """Flussonic DVR-URL: последний сегмент пути -> timeshift_abs-{utc}.m3u8."""
+    parts = urlsplit(media_url)
+    directory = parts.path.rsplit("/", 1)[0]
+    return urlunsplit(parts._replace(path=f"{directory}/timeshift_abs-{utc}.m3u8"))
+
+
+def flussonic_catchup_source(url: str) -> str:
+    """Шаблон catchup-source для TiviMate (плейсхолдеры {utc}/{duration}).
+
+    Строится от stream URL, а не от media URL: stream URL уже прошёл
+    проверку секретов при публикации; media URL может нести токены.
+    """
+    if "?" in url:
+        return f"{url}&utc={{utc}}&duration={{duration}}"
+    return flussonic_timeshift_url(url, 0).replace(
+        "timeshift_abs-0.m3u8", "timeshift_abs-{utc}.m3u8"
+    )
+
+
+@dataclass
+class DvrOutcome:
+    """Результат DVR-пробы (catchup/архив, issue #10)."""
+
+    ok: bool = False
+    hours: int | None = None
+
+
+async def probe_dvr(
+    media_url: str,
+    client: httpx.AsyncClient,
+    *,
+    max_bytes: int = 262144,
+    max_redirects: int = 5,
+    hours_ago: int = 1,
+) -> DvrOutcome:
+    """DVR-проба Flussonic: не более двух запросов после успешного базового чека.
+
+    Варианты по порядку: ``?utc=<epoch>`` на media URL, затем
+    ``timeshift_abs-{utc}.m3u8`` в той же директории. Успех = 2xx и
+    валидный media playlist с сегментами за час назад (DVR >= 1 ч).
+    """
+    utc = int(time.time()) - hours_ago * 3600
+    separator = "&" if "?" in media_url else "?"
+    candidates = [
+        f"{media_url}{separator}utc={utc}",
+        flussonic_timeshift_url(media_url, utc),
+    ]
+    for url in candidates:
+        response = await fetch(client, url, max_bytes=max_bytes, max_redirects=max_redirects)
+        if response.error_code or response.status >= 400:
+            continue
+        text = response.body.decode("utf-8", errors="replace")
+        if looks_like_playlist(text) and parse_media_playlist(text, response.final_url or url):
+            return DvrOutcome(ok=True, hours=hours_ago)
+    return DvrOutcome(ok=False)
 
 
 async def check_hls(

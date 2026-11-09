@@ -9,13 +9,13 @@ import logging
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 import httpx
 
 from . import __version__
-from .checking import parse_levels, run_checks
+from .checking import flussonic_catchup_source, parse_levels, run_checks
 from .checking.geo import detect_country_code
 from .discovery import create_adapter, fetch_all
 from .domain.channel import Channel
@@ -35,6 +35,7 @@ from .filtering.country_profiles import SelectedStream
 from .generators import (
     assign_channel_numbers,
     build_report,
+    build_stats,
     channels_catalog,
     entry_for,
     render_index_html,
@@ -43,6 +44,7 @@ from .generators import (
     streams_catalog,
     write_json,
 )
+from .history.lifecycle import analyze_lifecycle
 from .history.retention import prune_storage
 from .infrastructure.http_client import create_client
 from .infrastructure.logging import setup_logging
@@ -517,14 +519,6 @@ def run_build(
     channels_by_id = {c.channel_id: c for c in channels}
     approved = load_approved_ids(settings.state_dir)
 
-    decisions: dict[str, PublishDecision] = {}
-    for stream in streams:
-        channel = channels_by_id.get(stream.channel_id)
-        if channel is not None:
-            decisions[stream.stream_id] = decide_publication(
-                channel, stream, sources_by_id.get(stream.source_id), approved
-            )
-
     storage = create_storage(settings)
     history = storage.load()
     storage.close()
@@ -532,6 +526,50 @@ def run_build(
     for result in history:
         grouped.setdefault(result.stream_id, []).append(result)
     heights = {sid: best_height(results) for sid, results in grouped.items()}
+
+    # DVR-состояние потока по последней пробе (issue #10): dvr True/False
+    # чередуются — берём значение из самой свежей пробы с непустым полем.
+    dvr_by_stream: dict[str, int] = {}
+    for sid, results in grouped.items():
+        ordered = sorted(results, key=lambda r: r.checked_at)
+        hours: int | None = None
+        for r in ordered:
+            if r.dvr:
+                hours = r.dvr_hours or 1
+            elif r.dvr is False:
+                hours = None
+        if hours:
+            dvr_by_stream[sid] = hours
+
+    # Жизненный цикл (issue #8): N провалов подряд — stale, 2N — автодeny.
+    lifecycle_cfg = settings.lifecycle
+    lifecycle = {
+        sid: analyze_lifecycle(
+            results,
+            stale_after=lifecycle_cfg.stale_consecutive_failures,
+            deny_after=lifecycle_cfg.deny_consecutive_failures,
+        )
+        for sid, results in grouped.items()
+    }
+    stale_count = sum(1 for lc in lifecycle.values() if lc.stale and not lc.denied)
+    denied_count = sum(1 for lc in lifecycle.values() if lc.denied)
+    if stale_count or denied_count:
+        click.echo(f"Жизненный цикл: stale {stale_count}, автодeny {denied_count}")
+
+    decisions: dict[str, PublishDecision] = {}
+    for stream in streams:
+        channel = channels_by_id.get(stream.channel_id)
+        if channel is not None:
+            lc = lifecycle.get(stream.stream_id)
+            decisions[stream.stream_id] = decide_publication(
+                channel,
+                stream,
+                sources_by_id.get(stream.source_id),
+                approved,
+                denied_consecutive_failures=(
+                    lc.consecutive_failures if lc is not None and lc.denied else None
+                ),
+            )
 
     playlists = [
         p for p in country_profile.playlists if only_profile is None or p.profile == only_profile
@@ -543,6 +581,7 @@ def run_build(
     dist_country.mkdir(parents=True, exist_ok=True)
     written: list[dict[str, object]] = []
     default_selection: list[SelectedStream] = []
+    report: dict[str, object] | None = None
 
     for index, playlist in enumerate(playlists):
         profile_cfg = quality.profile(playlist.profile)
@@ -566,6 +605,13 @@ def run_build(
         )
         included = best_per_channel([sel for sel in selected if sel.included])
         entries = [entry_for(sel.channel, sel.stream) for sel in included]
+        # Catchup-атрибуты для потоков с подтверждённым DVR (issue #10).
+        for sel, entry in zip(included, entries, strict=True):
+            hours = dvr_by_stream.get(sel.stream.stream_id)
+            if hours:
+                entry.catchup = "flussonic"
+                entry.catchup_days = hours
+                entry.catchup_source = flussonic_catchup_source(sel.stream.url)
         assign_channel_numbers(entries, overrides=country_profile.channel_numbers)
         (dist_country / playlist.filename).write_text(
             render_m3u(entries, epg_url=country_profile.epg_filename),
@@ -579,6 +625,7 @@ def run_build(
                 selections=selected,
                 results=history,
                 generated_at=now_utc(),
+                lifecycle=lifecycle,
             )
             write_json(dist_country / "report.json", report)
         written.append(
@@ -600,6 +647,7 @@ def run_build(
     write_json(dist_country / "streams.json", streams_catalog(default_selection))
 
     # XMLTV, если есть сопоставленные программы.
+    programmes: list[EpgProgramme] = []
     epg_path = _state_path(settings, STATE_EPG_PROGRAMMES)
     if country_profile.epg_filename and epg_path.is_file():
         with epg_path.open("r", encoding="utf-8") as fh:
@@ -609,6 +657,49 @@ def run_build(
             (dist_country / country_profile.epg_filename).write_text(xmltv_text, encoding="utf-8")
             click.echo(f"XMLTV: {len(programmes)} программ -> {country_profile.epg_filename}")
 
+    # stats.json и дашборд (issue #9): сводка проекта + покрытие EPG плейлиста.
+    included_default = [s for s in default_selection if s.included]
+    programme_channels = {p.channel for p in programmes}
+    epg_playlist_channels = sum(
+        1 for s in included_default if s.channel.tvg_id and s.channel.tvg_id in programme_channels
+    )
+    stats = build_stats(
+        country=country,
+        channels_total=len(country_channels),
+        selections=default_selection,
+        results=history,
+        generated_at=now_utc(),
+        epg_playlist_channels=epg_playlist_channels,
+        lifecycle=lifecycle,
+    )
+    write_json(dist_country / "stats.json", stats)
+    click.echo(
+        f"Stats: каталог {stats['catalog']['channels']} каналов, "
+        f"плейлист {stats['playlist']['channels']} каналов, "
+        f"EPG {epg_playlist_channels}/{stats['playlist']['streams']}"
+    )
+
+    # Топ каналов для index.html: по score, uptime — из отчёта.
+    report_streams: dict[str, dict[str, Any]] = {}
+    if report is not None:
+        report_data = cast(dict[str, Any], report)
+        report_streams = {str(s["stream_id"]): s for s in report_data["streams"]}
+    top_channels = []
+    for sel in sorted(
+        included_default,
+        key=lambda s: -(s.score.score if s.score and s.score.score is not None else -1.0),
+    )[:20]:
+        report_entry: dict[str, Any] = report_streams.get(sel.stream.stream_id, {})
+        top_channels.append(
+            {
+                "name": sel.channel.name,
+                "logo": sel.channel.logo_url,
+                "group": sel.channel.category.value,
+                "score": report_entry.get("score"),
+                "uptime": report_entry.get("uptime_7d_percent"),
+            }
+        )
+
     # Индексная страница.
     settings.dist_dir.mkdir(parents=True, exist_ok=True)
     (settings.dist_dir / "index.html").write_text(
@@ -617,6 +708,8 @@ def run_build(
             playlists=written,
             report_path=f"{country.lower()}/report.json",
             last_generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            stats=stats,
+            top_channels=top_channels,
         ),
         encoding="utf-8",
     )

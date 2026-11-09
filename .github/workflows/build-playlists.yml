@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: write # метка ci-failing на roadmap при падении (issue #11)
 
 concurrency:
   group: build-playlists
@@ -36,6 +37,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Guard: home-ru freshness
+        # Ранний сигнал «ночной домашний прогон перестал приходить» (issue #11):
+        # сборка краснеет, если данных home-ru нет дольше 36 часов.
+        run: |
+          f=data/state/checks.jsonl
+          latest=$(grep '"probe_location":"home-ru"' "$f" \
+            | grep -o '"checked_at":"[^"]*"' | sort | tail -1 | cut -d'"' -f4 || true)
+          if [[ -z "$latest" ]]; then
+            echo "::error::home-ru: данных нет вовсе — ночной домашний прогон не публиковался в probe/ru" >&2
+            exit 1
+          fi
+          python3 - "$latest" <<'PY'
+          import datetime, sys
+          latest = datetime.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+          age_h = (datetime.datetime.now(datetime.timezone.utc) - latest).total_seconds() / 3600
+          print(f"home-ru: последняя проверка {latest.isoformat()} ({age_h:.1f} ч назад)")
+          if age_h > 36:
+              sys.exit(f"::error::home-ru данные старше 36 ч ({age_h:.0f} ч) — домашний прогон молчит")
+          PY
+
       - name: Refresh catalog and enrich
         run: |
           uv run iptv-monitor discover
@@ -48,6 +69,25 @@ jobs:
           uv run iptv-monitor score
           uv run iptv-monitor build --country RU
 
+      - name: Job summary
+        run: |
+          cat > /tmp/build_summary.py <<'PY'
+          import json
+          report = json.load(open("dist/ru/report.json", encoding="utf-8"))
+          s = report["summary"]
+          print(f"Потоков всего: **{s['streams_total']}**, включено: **{s['streams_included']}**, исключено: {s['streams_excluded']}")
+          print(f"Уровни: {s.get('levels', {})}")
+          print(f"Точки наблюдения: {s.get('probe_locations', {})}")
+          print(f"Жизненный цикл: stale **{s.get('lifecycle_stale', 0)}**, автодeny **{s.get('lifecycle_denied', 0)}**")
+          top = s.get("top_error_codes") or {}
+          if top:
+              print(f"Топ ошибок: {top}")
+          PY
+          {
+            echo "## Build playlists"
+            python3 /tmp/build_summary.py
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
@@ -55,3 +95,18 @@ jobs:
           path: dist/
           retention-days: 30
           if-no-files-found: error
+
+      - name: Mark roadmap failing
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/4/labels" \
+            -f "labels[]=ci-failing" >/dev/null
+
+      - name: Clear roadmap failing label
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/4/labels/ci-failing" >/dev/null 2>&1 || true

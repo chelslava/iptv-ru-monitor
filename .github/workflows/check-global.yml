@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  issues: write # метка ci-failing на roadmap при падении (issue #11)
 
 concurrency:
   group: check-global
@@ -46,6 +47,25 @@ jobs:
         env:
           IPTV_JSONL_PATH: data/state/checks-global.jsonl
 
+      - name: Job summary
+        if: always()
+        run: |
+          f=data/state/checks-global.jsonl
+          {
+            echo "## Check global"
+            if [[ -f "$f" ]]; then
+              total=$(wc -l < "$f")
+              ok=$(grep -c '"error_code":null' "$f" || true)
+              echo "Проверено: **$total**, успешно: **$ok**"
+              echo
+              echo '```'
+              grep -o '"error_code":"[a-z_0-9]*"' "$f" | sort | uniq -c | sort -rn | head -10
+              echo '```'
+            else
+              echo "Артефакт проверок не найден."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload check results
         uses: actions/upload-artifact@v4
         with:
@@ -53,3 +73,18 @@ jobs:
           path: data/state/checks-global.jsonl
           retention-days: 30
           if-no-files-found: error
+
+      - name: Mark roadmap failing
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/4/labels" \
+            -f "labels[]=ci-failing" >/dev/null
+
+      - name: Clear roadmap failing label
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/4/labels/ci-failing" >/dev/null 2>&1 || true

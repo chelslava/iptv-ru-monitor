@@ -69,8 +69,16 @@ def decide_publication(
     stream: Stream,
     source: SourceConfig | None,
     approved_ids: set[str] | None = None,
+    *,
+    denied_consecutive_failures: int | None = None,
 ) -> PublishDecision:
-    """Принять решение о допуске потока к публичной сборке."""
+    """Принять решение о допуске потока к публичной сборке.
+
+    denied_consecutive_failures — провалы подряд, достигшие порога
+    автодeny (issue #8). Порог задаётся в config/app.yaml (lifecycle);
+    approved-запись при этом не удаляется — восстановление происходит
+    автоматически после первого успешного чека.
+    """
     reasons: list[str] = []
     approved_ids = approved_ids or set()
 
@@ -78,6 +86,9 @@ def decide_publication(
         reasons.append("stream disabled")
     if stream.publication_status == PublicationStatus.REJECTED:
         reasons.append("stream rejected manually")
+
+    if denied_consecutive_failures is not None and denied_consecutive_failures > 0:
+        reasons.append(f"auto-denied ({denied_consecutive_failures} consecutive failures)")
 
     # Подтверждение review-источника и есть допуск канала к публикации:
     # без is_public у review-источников подтверждение не имело бы силы.

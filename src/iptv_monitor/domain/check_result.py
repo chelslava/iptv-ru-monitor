@@ -46,6 +46,11 @@ class CheckResult(BaseModel):
     error_code: CheckErrorCode | None = None
     error_message: str | None = None
 
+    # DVR/catchup (issue #10): заполняется DVR-пробой Flussonic при
+    # check.dvr_probe=true. dvr_hours — подтверждённая глубина архива.
+    dvr: bool | None = None
+    dvr_hours: int | None = None
+
     check_version: str = __version__
 
     def is_success(self) -> bool:

@@ -167,10 +167,22 @@ dist/
     ├── russia.xml        # XMLTV EPG (согласованные tvg-id)
     ├── channels.json     # нормализованный каталог каналов
     ├── streams.json      # публичные сведения о потоках (без секретов)
-    └── report.json       # причины включения/исключения каждого потока
+    ├── stats.json        # сводные счётчики и время последней проверки точек
+    └── report.json       # причины включения/исключения каждого потока + uptime
 ```
 
 `dist/` генерируется автоматически и вручную не редактируется.
+
+## 🔌 Данные/API
+
+Все артефакты — машиночитаемый JSON, доступен без авторизации:
+
+| Файл | Содержимое |
+|---|---|
+| [`stats.json`](https://chelslava.github.io/iptv-ru-monitor/ru/stats.json) | счётчики каталога/плейлиста, покрытие EPG, автодeny, последнее время проверки каждой точки наблюдения |
+| [`report.json`](https://chelslava.github.io/iptv-ru-monitor/ru/report.json) | по каждому потоку: score, уровень, причины исключения, uptime 7д/30д, провалы подряд |
+| [`channels.json`](https://chelslava.github.io/iptv-ru-monitor/ru/channels.json) | каталог каналов (имена, tvg-id, логотипы, категории, страна) |
+| [`streams.json`](https://chelslava.github.io/iptv-ru-monitor/ru/streams.json) | потоки и решения публикации (URL — только без секретов) |
 
 ## 📺 Подключение в TiviMate (Android TV)
 

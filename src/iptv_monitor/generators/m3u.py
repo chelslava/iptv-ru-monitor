@@ -20,6 +20,11 @@ class M3UEntry:
     tvg_logo: str | None = None
     group_title: str | None = None
     tvg_chno: int | None = None
+    # Catchup/архив (issue #10): атрибуты понимает TiviMate (community
+    # верифицировано). catchup_source — шаблон с {utc}/{duration}.
+    catchup: str | None = None
+    catchup_days: int | None = None
+    catchup_source: str | None = None
 
 
 def _escape(value: str) -> str:
@@ -105,6 +110,12 @@ def render_m3u(entries: list[M3UEntry], *, epg_url: str | None = None) -> str:
             attrs += f' tvg-name="{_escape(entry.tvg_name)}"'
         if entry.tvg_chno is not None:
             attrs += f' tvg-chno="{entry.tvg_chno}"'
+        if entry.catchup:
+            attrs += f' catchup="{_escape(entry.catchup)}"'
+        if entry.catchup_days is not None:
+            attrs += f' catchup-days="{entry.catchup_days}"'
+        if entry.catchup_source:
+            attrs += f' catchup-source="{_escape(entry.catchup_source)}"'
         if entry.tvg_logo:
             attrs += f' tvg-logo="{_escape(entry.tvg_logo)}"'
         if entry.group_title:
