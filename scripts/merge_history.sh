@@ -16,28 +16,39 @@ set -euo pipefail
 mkdir -p data/state artifacts/global artifacts/ru probe/ru history/global
 
 echo "==> Ветка history/global (постоянная история github-runner, issue #16)"
+BRANCH_RUN_IDS=""
 if git fetch origin "+refs/heads/history/global:refs/remotes/origin/history/global" 2>/dev/null; then
   git ls-tree --name-only refs/remotes/origin/history/global \
-    | grep -E '^checks-global-[0-9]{8}-[0-9]{4}\.jsonl\.gz$' \
+    | grep -E '^checks-global-[0-9]{8}-[0-9]{4}(-r[0-9]+)?\.jsonl\.gz$' \
     | while read -r f; do
         git show "refs/remotes/origin/history/global:$f" | gzip -d > "history/global/${f%.gz}"
       done
   echo "    файлов: $(ls -1 history/global | wc -l)"
+  # Прогоны, уже живущие в ветке (суффикс -r<run_id>): их артефакты ниже
+  # пропускаются, чтобы не задваивать одни и те же проверки.
+  BRANCH_RUN_IDS=$(git ls-tree --name-only refs/remotes/origin/history/global \
+    | grep -oE '\-r[0-9]+\.jsonl\.gz$' | grep -oE '[0-9]+' | sort -u || true)
 else
-  echo "    ветка не найдена — fallback на артефакты check-global (последние 5 прогонов)"
-  for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
-      --status success --limit 5 --json databaseId -q '.[].databaseId'); do
-    art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
-      --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
-    [[ -z "$art_id" ]] && continue
-    curl -sL -H "Authorization: Bearer $GH_TOKEN" \
-      "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
-      -o /tmp/global.zip
-    # Файл в каждом артефакте один и тот же — свой подкаталог на прогон.
-    unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
-  done
-  echo "    файлов: $(find artifacts/global -name '*.jsonl' | wc -l)"
+  echo "    ветка не найдена — только артефакты check-global (последние 5 прогонов)"
 fi
+
+echo "==> Артефакты check-global (последние 5 прогонов, кроме уже слитых из ветки)"
+for run_id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow check-global.yml \
+    --status success --limit 5 --json databaseId -q '.[].databaseId'); do
+  if echo "$BRANCH_RUN_IDS" | grep -qx "$run_id"; then
+    echo "    run $run_id уже в ветке — пропуск"
+    continue
+  fi
+  art_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+    --jq '.artifacts[] | select(.name=="checks-global") | .id' | head -1)
+  [[ -z "$art_id" ]] && continue
+  curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+    "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$art_id/zip" \
+    -o /tmp/global.zip
+  # Файл в каждом артефакте один и тот же — свой подкаталог на прогон.
+  unzip -o -j /tmp/global.zip -d "artifacts/global/$run_id"
+done
+echo "    файлов: $(find artifacts/global -name '*.jsonl' | wc -l)"
 
 echo "==> Артефакт check-ru (последний успешный прогон)"
 ru_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow check-ru.yml \

@@ -123,7 +123,9 @@ jobs:
           else
             git worktree add --orphan -b "$BRANCH" "$WORKTREE"
           fi
-          gzip -c "$F" > "$WORKTREE/checks-global-$STAMP.jsonl.gz"
+          # run_id в имени файла: merge_history.sh отличает данные прогона,
+          # уже лежащие в ветке, от его же артефакта (защита от дублей).
+          gzip -c "$F" > "$WORKTREE/checks-global-$STAMP-r${GITHUB_RUN_ID}.jsonl.gz"
           # Ретенция в ветке: удаляем файлы старше 30 дней по дате в имени.
           # Git-команды — в подshell с cd: cwd родителя не меняется, иначе
           # cleanup-trap падает «Unable to read current working directory».
@@ -141,7 +143,7 @@ jobs:
             else
               git config user.name "iptv-ru-monitor bot"
               git config user.email "bot@users.noreply.github.com"
-              git commit -m "history: github-runner $STAMP (slot $ROTATE_SLOT/$ROTATE_PARTS)"
+              git commit -m "history: github-runner $STAMP (slot $ROTATE_SLOT/$ROTATE_PARTS, run ${GITHUB_RUN_ID})"
               git push origin "$BRANCH"
             fi
           )
