@@ -72,6 +72,7 @@ class CheckErrorCode(StrEnum):
     SSRF_BLOCKED = "ssrf_blocked"
     UNSUPPORTED_SCHEME = "unsupported_scheme"
     REDIRECT_LIMIT = "redirect_limit"
+    REDIRECT_INVALID = "redirect_invalid"  # редирект без Location (issue #19)
     DNS_ERROR = "dns_error"
     TLS_ERROR = "tls_error"
     HTTP_4XX = "http_4xx"

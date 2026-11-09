@@ -187,23 +187,23 @@ async def fetch(
                         tls_ok = True
                     if response.status_code in _REDIRECT_STATUSES:
                         location = response.headers.get("location")
-                        if location:
-                            redirects += 1
-                            if redirects > max_redirects:
-                                return FetchResult(
-                                    url=url,
-                                    status=response.status_code,
-                                    final_url=current,
-                                    redirects=redirects,
-                                    elapsed_ms=int((time.perf_counter() - started) * 1000),
-                                    dns_ok=dns_ok,
-                                    tls_ok=tls_ok,
-                                    error_code=CheckErrorCode.REDIRECT_LIMIT,
-                                    error_message=f"more than {max_redirects} redirects",
-                                )
-                            current = urljoin(current, location)
-                            continue
-                        # Редирект без Location — считаем ответ терминальным.
+                        if not location:
+                            # Редирект без Location — переходить некуда, ответ
+                            # терминальный. Раньше здесь были TypeError
+                            # (urljoin(current, None)) или бесконечный цикл
+                            # для пустого Location (issue #19).
+                            return FetchResult(
+                                url=url,
+                                status=response.status_code,
+                                final_url=current,
+                                redirects=redirects,
+                                elapsed_ms=int((time.perf_counter() - started) * 1000),
+                                dns_ok=dns_ok,
+                                tls_ok=tls_ok,
+                                error_code=CheckErrorCode.REDIRECT_INVALID,
+                                error_message=f"redirect {response.status_code} without location",
+                            )
+                        redirects += 1
                         if redirects > max_redirects:
                             return FetchResult(
                                 url=url,

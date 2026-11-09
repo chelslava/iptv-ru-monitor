@@ -194,11 +194,25 @@ def run_check(
         return []
 
     total = len(streams)
+    storage = create_storage(settings)
+    # Инкрементальная запись истории (issue #19): результаты сбрасываются
+    # в хранилище батчами по мере завершения проверок — падение процесса
+    # не теряет уже выполненную работу.
+    pending: list[CheckResult] = []
+    flush_every = 250
+
+    def _flush() -> None:
+        if pending:
+            storage.append(pending)
+            pending.clear()
 
     def _progress(done: int, result: CheckResult) -> None:
         if done == total or done % 25 == 0:
             status = "ok" if result.is_success() else f"FAIL ({result.error_code})"
             click.echo(f"  [{done}/{total}] {result.stream_id}: {status}")
+        pending.append(result)
+        if len(pending) >= flush_every:
+            _flush()
 
     async def _run() -> list[CheckResult]:
         if client is not None:
@@ -229,10 +243,11 @@ def run_check(
             dvr_stream_ids=dvr_stream_ids,
         )
 
-    results = asyncio.run(_run())
-    storage = create_storage(settings)
-    storage.append(results)
-    storage.close()
+    try:
+        results = asyncio.run(_run())
+    finally:
+        _flush()
+        storage.close()
 
     ok = sum(1 for r in results if r.is_success())
     errors = Counter(r.error_code.value for r in results if r.error_code)

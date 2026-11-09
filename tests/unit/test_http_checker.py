@@ -80,3 +80,26 @@ async def test_body_limited() -> None:
     async with _client(handler) as client:
         result = await fetch(client, "https://big.example/live.ts", max_bytes=65536)
     assert len(result.body) <= 65536
+
+
+async def test_redirect_without_location_is_terminal() -> None:
+    """Редирект без Location — терминальный ответ, а не TypeError/цикл (issue #19)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302)  # заголовка location нет
+
+    async with _client(handler) as client:
+        result = await fetch(client, "https://broken.example/live.m3u8")
+    assert result.error_code == CheckErrorCode.REDIRECT_INVALID
+    assert "without location" in (result.error_message or "")
+
+
+async def test_redirect_with_empty_location_is_terminal() -> None:
+    """Пустой Location тоже не должен зацикливать fetch (issue #19)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": ""})
+
+    async with _client(handler) as client:
+        result = await fetch(client, "https://empty.example/live.m3u8")
+    assert result.error_code == CheckErrorCode.REDIRECT_INVALID

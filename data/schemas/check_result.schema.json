@@ -26,7 +26,8 @@
     "error_code": {
       "type": ["string", "null"],
       "enum": [
-        "ssrf_blocked", "unsupported_scheme", "redirect_limit", "dns_error",
+        "ssrf_blocked", "unsupported_scheme", "redirect_limit",
+        "redirect_invalid", "dns_error",
         "tls_error", "http_4xx", "http_5xx", "transport_error", "timeout",
         "invalid_content", "hls_invalid", "hls_variant_unavailable",
         "segment_error", "ffprobe_unavailable", "ffprobe_timeout",

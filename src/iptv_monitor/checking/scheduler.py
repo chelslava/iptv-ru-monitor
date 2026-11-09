@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 import httpx
 
 from ..domain.check_result import CheckResult
-from ..domain.enums import StreamProtocol
+from ..domain.enums import CheckErrorCode, StreamProtocol
 from ..domain.stream import Stream
 from ..infrastructure.http_client import fetch
 from ..infrastructure.logging import redact_text
@@ -200,4 +200,25 @@ async def run_checks(
                 progress(completed, result)
         return result
 
-    return list(await asyncio.gather(*(_one(stream) for stream in streams)))
+    outcomes = await asyncio.gather(*(_one(stream) for stream in streams), return_exceptions=True)
+
+    # Необработанное исключение в check_stream не должно терять результаты
+    # всего прогона: падение фиксируется как CheckResult с unknown-ошибкой
+    # (issue #19). Сообщение редактируется — URL может содержать токены.
+    results: list[CheckResult] = []
+    for stream, outcome in zip(streams, outcomes, strict=True):
+        if isinstance(outcome, BaseException):
+            logger.warning(
+                "check_stream failed for %s: %s",
+                stream.stream_id,
+                redact_text(f"{type(outcome).__name__}: {outcome}"),
+            )
+            outcome = CheckResult(
+                stream_id=stream.stream_id,
+                probe_location=resolve_probe_location(probe_location, settings),
+                country_code=country_code,
+                error_code=CheckErrorCode.UNKNOWN,
+                error_message=redact_text(f"{type(outcome).__name__}: {outcome}"),
+            )
+        results.append(outcome)
+    return results
