@@ -31,18 +31,41 @@
 > Количество каналов — не показатель качества. Приоритет у проверяемости,
 > стабильности, корректного EPG и допустимости источника.
 
+## 🌐 Мониторинг онлайн
+
+Мониторинг публикуется на GitHub Pages и доступен из браузера без авторизации:
+
+| Что | Ссылка |
+|---|---|
+| 🏠 **Главная (все страны)** | [chelslava.github.io/iptv-ru-monitor](https://chelslava.github.io/iptv-ru-monitor/) |
+| 🇷🇺 **Статус-страница России** — поиск и фильтр по каталогу | [/ru/index.html](https://chelslava.github.io/iptv-ru-monitor/ru/index.html) |
+| 🇺🇿 Узбекистан | [/uz/index.html](https://chelslava.github.io/iptv-ru-monitor/uz/index.html) |
+
+На статус-странице: **поиск канала по имени**, фильтр по категории, статус
+потока (`excellent`/`good`/`unstable`/`failed`), score и uptime за 30 дней —
+можно проверить, работает ли канал, ещё до добавления плейлиста. Рядом —
+счётчики каталога, покрытие EPG, точки наблюдения и их свежесть.
+
+Плейлисты и машиночитаемые данные (см. [Данные/API](#-данныеapi)) лежат рядом,
+например основной плейлист:
+[ru/russia.m3u](https://chelslava.github.io/iptv-ru-monitor/ru/russia.m3u).
+
 ## ✨ Возможности
 
 | | |
 |---|---|
 | 🔎 **Discovery** | Сбор каналов из открытых источников: IPTV-org, Free-TV/IPTV, ngrch, IPTVMIR и любые M3U-списки (адаптер `remote_m3u`) |
-| 🧹 **Normalization** | Канонические названия, категории; страна определяется по `tvg-id` и названию, а не наследуется от источника; канал отделён от потока |
-| 🔬 **Многоуровневые проверки** | HTTP/DNS/TLS → HLS (playlist + первый сегмент) → FFprobe (кодеки, разрешение, битрейт) → ограниченное декодирование |
-| 🌍 **Географический контекст** | Результаты маркируются точкой наблюдения: `github-runner`, `ru-vds`, `home-ru` — доступность из РФ не смешивается с зарубежной |
-| 📈 **Скоринг по истории** | Рейтинг строится по повторным проверкам; новым потокам присваивается `insufficient_data`, а не завышенный балл |
-| 📺 **EPG и логотипы** | Сопоставление XMLTV по `tvg-id`, ручным алиасам и нормализованным названиям; ручные совпадения не перезаписываются |
-| 🛡 **Безопасная публикация** | Секретные URL и токены не попадают в артефакты и логи; SSRF-защита при проверках сторонних URL; публикация — через подтверждение (PR с кандидатами) |
-| 📦 **Артефакты** | M3U для TiviMate, XMLTV, JSON-каталоги, отчёт с причинами включения/исключения |
+| 🧹 **Normalization** | Канонические названия, категории; страна по `tvg-id`/названию (UK→GB и др. алиасы), а не наследуется от источника; канал отделён от потока; URL-дедуп нормализует регистр/порт/порядок query |
+| 🔬 **Многоуровневые проверки** | HTTP/DNS/TLS → HLS (master/media playlist, выбор варианта по bandwidth, sniffing первого сегмента) → FFprobe → ограниченное декодирование; транзиентные ошибки повторяются |
+| 🌍 **Географический контекст** | Результаты маркируются точкой наблюдения: `github-runner`, `home-ru`, `ru-vds` — доступность из РФ не смешивается с зарубежной |
+| 🔄 **Ротация каталога** | github-runner проверяет ¼ каталога за 6ч-слот (весь каталог раз в сутки); история накапливается постоянно в ветке `history/global` — настоящие uptime 7д/30д вместо rolling-окна 30ч |
+| 📈 **Скоринг по истории** | Взвешенное среднее по компонентам с данными; уровням `excellent`/`good`/`unstable`/`failed`; новым потокам — `insufficient_data` |
+| 📺 **EPG и логотипы** | Сопоставление XMLTV: `tvg-id` → алиасы (скоупятся страной) → нормализованное имя → мост iptv-org/database → нечёткое совпадение (rapidfuzz, неоднозначные не применяются); ручные подтверждения не перезаписываются |
+| 🕹 **UA-fallback** | Потоки, отвечающие 401/403/444 плеерному User-Agent, перепроверяются с браузерным (~15% «мёртвых» так оживают); в M3U добавляются `#EXTVLCOPT`/`#KODIPROP` |
+| 🤖 **Автокандидаты** | Приоритетная очередь проверок (`--order approval`): второй точкой наблюдения первыми проверяются потоки, готовые стать кандидатами; PR с кандидатами группируется по источникам с чек-листом прав |
+| 🛡 **Безопасная публикация** | Секретные URL и токены (включая `username` Xtream) не попадают в артефакты и логи; SSRF-защита с pin-IP (DNS-rebinding закрыт); записи атомарны; публикация — через подтверждение (PR с кандидатами) |
+| 🌐 **Статус-страница** | Поиск и фильтр по каталогу каналов, статус/score/uptime каждого потока — [см. Мониторинг онлайн](#-мониторинг-онлайн) |
+| 📦 **Артефакты** | M3U для TiviMate, XMLTV, JSON-каталоги, per-profile отчёты с причинами включения/исключения |
 
 ## 🚀 Быстрый старт
 
@@ -59,6 +82,8 @@ uv run iptv-monitor pipeline --country RU   # полный цикл
 ```bash
 uv run iptv-monitor discover                    # сбор и нормализация источников
 uv run iptv-monitor check --levels http,hls     # проверка потоков
+uv run iptv-monitor check --rotate-offset 1 --rotate-parts 4   # срез каталога (CI-режим)
+uv run iptv-monitor check --order approval      # готовые к кандидату — первыми
 uv run iptv-monitor enrich                      # EPG и логотипы
 uv run iptv-monitor score                       # рейтинг по истории
 uv run iptv-monitor build --country RU          # генерация dist/
@@ -102,15 +127,25 @@ IPTV_LIMIT=500 IPTV_ROTATE_PARTS=15 bash scripts/ru_probe_push.sh
 flowchart TD
     SRC["🔎 Источники IPTV<br/>iptv-org · Free-TV · ngrch · IPTVMIR · custom"] --> DISC["Discovery<br/>разбор M3U"]
     DISC --> NORM["🧹 Normalization<br/>каналы · потоки · страны · категории · дедупликация"]
-    NORM --> GH["🐙 GitHub Actions<br/>probe: github-runner"]
-    NORM --> VDS["🇷🇺 Российская точка<br/>VDS или домашний ПК: ru-vds / home-ru"]
-    GH --> RES["🔬 Check Results<br/>HTTP · HLS · FFprobe · история"]
-    VDS --> RES
-    RES --> ENR["📺 Enrichment<br/>EPG · логотипы · алиасы"]
+    NORM --> GH["🐙 GitHub Actions<br/>github-runner: ¼ каталога за 6ч-слот"]
+    NORM --> VDS["🇷🇺 Российская точка<br/>домашний ПК: home-ru, ротация + priority-очередь"]
+    GH --> HIST["🗂 history/global<br/>постоянная история 30 дней"]
+    GH --> RES["🔬 Check Results"]
+    VDS --> PRB["🗂 probe/ru"]
+    HIST --> RES
+    PRB --> RES
+    RES --> ENR["📺 Enrichment<br/>EPG (fuzzy) · логотипы · алиасы"]
     ENR --> SCORE["📈 Quality Scoring<br/>рейтинг по истории"]
     SCORE --> GEN["📦 Generators<br/>M3U · XMLTV · JSON · HTML"]
-    GEN --> PAGES["🚀 GitHub Pages<br/>публичные артефакты"]
+    GEN --> PAGES["🚀 GitHub Pages<br/>плейлисты · статус-страница · API"]
+    GEN --> APPR["🤖 approve-candidates<br/>PR с кандидатами по источникам"]
 ```
+
+История проверок хранится в двух git-ветках — `history/global` (постоянная
+история github-runner, файл за прогон, ретенция 30 дней) и `probe/ru`
+(ночные прогоны домашней RU-точки). Сборка сливает обе + артефакт `check-ru`
+через `scripts/merge_history.sh` и обрезает по `retention` — поэтому
+`uptime_30d` в отчёте настоящие 30 дней, а не последние часы.
 
 <details>
 <summary>Уровни проверки потоков</summary>
@@ -147,10 +182,10 @@ flowchart TD
 
 | Файл | Назначение |
 |---|---|
-| [`config/app.yaml`](config/app.yaml) | Тайм-ауты, параллелизм, хранилище, ретенция |
+| [`config/app.yaml`](config/app.yaml) | Тайм-ауты, параллелизм, хранилище, ретенция, жизненный цикл, UA-fallback, порог EPG-fuzzy |
 | [`config/sources.yaml`](config/sources.yaml) | Источники и политика публикации (`allow` / `review` / `deny`) |
-| [`config/countries/ru.yaml`](config/countries/ru.yaml) | Профиль страны: плейлисты, EPG-алиасы |
-| [`config/quality_profiles.yaml`](config/quality_profiles.yaml) | Веса рейтинга и профили отбора (`ru_default`, `ru_hd`, `ru_kids`, `ru_sport`) |
+| [`config/countries/ru.yaml`](config/countries/ru.yaml) | Профиль страны: плейлисты, EPG-алиасы, номера каналов |
+| [`config/quality_profiles.yaml`](config/quality_profiles.yaml) | Веса рейтинга, профили отбора и критерии автокандидатов (`approval`) |
 | [`config/epg_sources.yaml`](config/epg_sources.yaml) | Источники XMLTV |
 | [`config/logo_sources.yaml`](config/logo_sources.yaml) | Источники логотипов |
 | [`.env.example`](.env.example) | Переопределения окружением (`IPTV_*`) |
@@ -162,8 +197,9 @@ flowchart TD
 
 ```
 dist/
-├── index.html            # страница со ссылками
-└── ru/
+├── index.html            # hub: ссылки на каталоги всех стран
+└── ru/                   # аналогично uz/ и другие страны
+    ├── index.html        # статус-страница: поиск и фильтр по каталогу
     ├── russia.m3u        # основной плейлист (TiviMate и др.)
     ├── russia-hd.m3u     # ≥ 720p
     ├── russia-kids.m3u   # детские
@@ -172,7 +208,8 @@ dist/
     ├── channels.json     # нормализованный каталог каналов
     ├── streams.json      # публичные сведения о потоках (без секретов)
     ├── stats.json        # сводные счётчики и время последней проверки точек
-    └── report.json       # причины включения/исключения каждого потока + uptime
+    ├── report.json       # отчёт основного профиля: причины вкл/искл + uptime
+    └── report-ru_hd.json # per-profile отчёты (ru_kids, ru_sport — аналогично)
 ```
 
 `dist/` генерируется автоматически и вручную не редактируется.
@@ -184,21 +221,37 @@ dist/
 | Файл | Содержимое |
 |---|---|
 | [`stats.json`](https://chelslava.github.io/iptv-ru-monitor/ru/stats.json) | счётчики каталога/плейлиста, покрытие EPG, автодeny, последнее время проверки каждой точки наблюдения |
-| [`report.json`](https://chelslava.github.io/iptv-ru-monitor/ru/report.json) | по каждому потоку: score, уровень, причины исключения, uptime 7д/30д, провалы подряд |
+| [`report.json`](https://chelslava.github.io/iptv-ru-monitor/ru/report.json) | по каждому потоку: score, уровень, причины исключения, uptime 7д/30д, провалы подряд (per-profile: `report-ru_hd.json` и др.) |
 | [`channels.json`](https://chelslava.github.io/iptv-ru-monitor/ru/channels.json) | каталог каналов (имена, tvg-id, логотипы, категории, страна) |
-| [`streams.json`](https://chelslava.github.io/iptv-ru-monitor/ru/streams.json) | потоки и решения публикации (URL — только без секретов) |
+| [`streams.json`](https://chelslava.github.io/iptv-ru-monitor/ru/streams.json) | потоки и решения публикации (URL — только без секретов, флаг `ua_required`) |
 
 ## 📺 Подключение в TiviMate (Android TV)
 
 1. Дождитесь публикации артефактов (workflow `publish-pages.yml`).
 2. TiviMate → *Настройки → Плейлисты → Добавить плейлист → URL*:
    `https://<аккаунт>.github.io/iptv-ru-monitor/ru/russia.m3u`
-3. Источник EPG: `.../ru/russia.xml` (генерируется из epg.pw, см.
+3. Источник EPG: `.../ru/russia.xml` (генерируется из epg.pw и iptvx.one, см.
    `config/epg_sources.yaml`).
 4. Тематические подборки: `russia-hd.m3u`, `russia-kids.m3u`, `russia-sport.m3u`.
 
 Локально: соберите плейлист командой `uv run iptv-monitor build` и укажите
 в TiviMate файл `dist/ru/russia.m3u`.
+
+<details>
+<summary>Потоки, требующие браузерный User-Agent</summary>
+
+Часть источников отдаёт контент только браузерному UA — такие потоки
+перепроверяются автоматически (`ua_fallback`) и помечаются в `streams.json`
+(`ua_required: true`); в M3U для VLC/Kodi добавляются `#EXTVLCOPT`/`#KODIPROP`.
+TiviMate задаёт User-Agent **на весь плейлист** (по-канальному не умеет):
+
+*Настройки → Плейлисты → (плейлист) → User-Agent* — укажите браузерный UA,
+например `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
+like Gecko) Chrome/126.0.0.0 Safari/537.36`.
+
+Проверить статус конкретного канала — через
+[поиск по каталогу](https://chelslava.github.io/iptv-ru-monitor/ru/index.html).
+</details>
 
 ## 🧪 Тестирование и качество
 
@@ -213,13 +266,18 @@ uv run mypy              # типизация
 
 ## 🗺️ Roadmap
 
-- [x] **Этап 0** — репозиторий, Python-проект, CI, схемы данных
-- [x] **Этап 1** — MVP Discovery: адаптер iptv-org, нормализация, дедупликация
-- [x] **Этап 2** — проверки потоков: HTTP/HLS/FFprobe, классификация ошибок
-- [x] **Этап 3** — инфраструктура РФ-точки: Docker-окружение VDS, скрипты, слияние результатов *(полная проверка — на реальном VDS)*
-- [x] **Этап 4** — EPG и логотипы: XMLTV, tvg-id, алиасы, отчёт о покрытии *(источники включаются после проверки лицензий)*
-- [x] **Этап 5** — рейтинг и плейлисты: профили качества, M3U/XMLTV, автоподготовка кандидатов на публикацию (PR от `approve-candidates`)
-- [ ] **Этап 6** — вторая страна (профиль `config/countries/<код>.yaml`); GitHub Pages уже опубликован
+Базовые этапы (0–6) выполнены: конвейер, проверки, RU-точка, EPG, рейтинг,
+публикация, вторая страна. Дальше — волны улучшений
+(подробный учёт — [issue #4](https://github.com/chelslava/iptv-ru-monitor/issues/4)):
+
+- [x] **Волна 1** (#5–#15) — EPG-мост, дедуп плейлиста, `tvg-chno`, жизненный
+  цикл, статус-страница v2, DVR-детекция, уведомления, второй профиль страны
+- [x] **Волна 2** (#16–#26) — постоянная история + ротация каталога,
+  priority-очередь home-ru, UA-fallback, атомарные записи, нормализация
+  скоринга, EPG-fuzzy, SSRF pin-IP, redaction, техдолг
+- [ ] **Волна 3** — приоритетная очередь approval (`--order approval`) и поиск
+  по каталогу на статус-странице — сделано; контроль качества `max_per_run`
+  17.11; backlog: catchup не-Flussonic, per-stream history API
 
 ## 📚 Документация
 
