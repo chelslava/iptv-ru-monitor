@@ -2,108 +2,189 @@
 # Дополняется автоматически кандидатами (iptv-monitor candidates --apply)
 # и вручную; детали — data/state/candidates.json и PR approve-candidates.
 stream_ids:
+
   - 007eb91757ddf62a
   - 00f1acf1b5763fb9
   - 014cb70f47d0ab11
   - 0192951aa5481444
+  - 02c795941871fade
+  - 037c8aeeac698895
+  - 04ae434d83469f76
   - 073f03c5ba6d1c49
+  - 0742d0625db6f8f2
   - 08487755e3713336
   - 0da24b72ccfa525f
+  - 0ec44b495080cd88
+  - 105395ca9b5e6b37
   - 10f2271eadacceec
   - 13eabd855b517d74
   - 144e5acc08c7235f
   - 1456c497c24d0df8
+  - 1a1573faf4caefd0
   - 1a70e2fb3cf66cfc
   - 1c152a4e82999e34
+  - 1c6627782f52176f
   - 1e9b01bdf385f11c
   - 1fc0562bc51f8dc0
+  - 20c54394849ce3da
   - 2143ede26cffddfe
   - 2328906d950828ab
   - 244fb65bbaa9848b
   - 2502e0bb143fcd49
   - 262c575ab82a3120
+  - 274f1efe9479718e
   - 27fcbbf607ae1421
   - 2858b9f08c3903d4
+  - 2870c88ddff797ff
+  - 29e98b6bb1d0de16
   - 2b5a59376cf7d620
+  - 2bf3e33bbf18ff12
+  - 31cb8e9b9fbda43a
   - 37136daecbc9a701
+  - 387bfa18965b413d
   - 3b04bb4230bb7838
   - 3e36923368d2f84d
+  - 4052e57b2b9f219e
+  - 409741ecdc5b26ac
+  - 4166587a127e3324
   - 4238d2230354b13f
+  - 4240d4e84f0868f7
   - 424569d194b370d2
+  - 426d08642cf14be0
+  - 44c2c648e8955516
+  - 457ff0696e9f6850
+  - 458a0d01fb9762f8
   - 46350426d728cce0
   - 46d4a65b7b5274a3
   - 46d78316c48d2527
   - 4730a6fa74ac53c1
+  - 478591fa3aa53664
+  - 47a657a7bd8d43ff
   - 480e5e27cf829b54
+  - 4b47458295578f58
+  - 4d4b0a2075d0a4a2
+  - 4e5e6e25b3d78a59
   - 4f0845fd1842583d
   - 50c4aa209c7e74c7
   - 51ffb82c18c38fa5
+  - 5381b13670b18699
   - 56555a9506001e27
   - 579f8ccdad5aa2b5
+  - 57de22b8632fdb1f
   - 59c834507da2343a
+  - 5b7bad468b3e857f
+  - 5c0a9ff91a2c6279
   - 5cddeba55350a2a7
   - 5e8e03a2402b0852
   - 5f5b071c371939ab
+  - 5fa18f56238c905f
+  - 627f1209992ac2c4
+  - 62a6a8506aa20f38
   - 63a12cab934d267a
   - 643b1e19d113320b
   - 6a7c20c89878fac2
   - 6b7d89716f12e12f
   - 6c0563abb975917e
+  - 6da1ac3ae099f951
   - 6db0e1732cf58e9c
+  - 6fb29d972ac2a05e
   - 703decbb92d41a20
   - 71512bfdc63778dd
+  - 7262ae6d87f28d7a
   - 75f7a0266d97672e
+  - 76860cc27baa4f88
+  - 7839883f624de769
+  - 79232a19dd17953c
   - 792cbbadc8c00b1d
+  - 7be5faf38433a25e
   - 7cfaef0ff6902ead
   - 7d48c38cb88449e7
   - 7f438827aa7a7f77
+  - 7fb2438adca5e465
   - 813ed8d98254f388
   - 82df8379237200ac
+  - 833c096081c0422f
+  - 86ef5ecde728bde2
+  - 8732a994f76817ed
   - 87fa3bb9e98bfd19
+  - 8910c446a871359d
+  - 8ad68d0dc2ce340c
   - 8b51f6767f4ef2f8
   - 8c92c9b2839b66da
+  - 9057f5c76116dbb6
   - 91f1f6c9771b4dde
+  - 9310e4f9b17981a3
+  - 93b33a32da6037e3
+  - 93ecb8115af3ca23
   - 94bfee9b8e2b58b3
   - 97108a341e679e64
   - 9934f80007e1ebb7
   - 99823e8c2f612d0c
+  - 9a85d75074a3ef97
   - 9d62374124f558a2
+  - 9ea50b9774ce16fe
   - a093bbd933729fba
+  - a31805c948787f38
   - a493c7c240c078b5
   - a4ed15d4e97a60c2
   - a59ce824124367a7
+  - a65f6838d3aedf27
+  - a854eea081bc9310
   - a9680a101c0847c4
+  - aa2de6ff07b0b5c7
   - ac18726c7e8aaf74
   - acbb59afab9ee91f
   - b0e0566e81dc353c
+  - b0f0cc3d7e655f15
+  - b0fa708ca9c7748a
+  - b18ededf30cdd60d
   - b58a00b41f650e14
   - b593807966f63bca
   - b66f2c937c6af3c7
+  - b7985f4024e4c3ff
   - bc34d90ce76a9cc0
   - bd782e3301fd5011
+  - bdfcb8c10b159e47
+  - be34c9765c8fdfc9
+  - be64859b75fa6cee
+  - bf3ba4afd913a38d
   - c0f0ea4cf8a5f237
   - c16824277539c8e4
   - c79ead48aad6e382
   - ca3b5584da3a962c
+  - cb522ff267bcbd7c
   - cdabad1777fe188f
   - d014f5d63985b3e2
   - d109b44ce8b156d6
   - d27f654767b83e51
+  - d47db70b924abacb
   - d48a230bf84941c4
   - d8b65540c472f6f6
+  - d8c916ce30114672
+  - db139f1344d00048
+  - db99c56b2fe620bf
   - dc3b9e56f9bd8c44
   - df0c5262154ac8db
   - e0af5666461662ba
   - e26ac3ec0d0df475
   - e2c6cf3695496ed6
   - e3bddf55e2e4850c
+  - e3f279e119d97430
+  - e5ab63315d35660e
   - e79cc132c553b472
   - e842120de349a114
+  - e8433b35fbcd06e7
   - e864a36b68548636
+  - e91a91a7a4468757
   - ea8fbb31d587f048
+  - eabb68be9a9a0099
   - ec25ff1f6b5442d6
+  - ec96fedb579df86f
   - ecf25be385f17d81
+  - eea65e8026258092
   - ef3aa4c9f9c371d4
+  - f01f2d5cacfced3e
+  - f0e953a3bccdbeee
   - f10f439a40753360
   - f57478f7df12f459
   - f620ba9ca1974eca
@@ -111,3 +192,4 @@ stream_ids:
   - fb941c352d4df1a5
   - fbd585df32defc34
   - fd6feb86fdb4770c
+  - fe91f4a8d0d164a2
