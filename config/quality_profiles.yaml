@@ -53,4 +53,10 @@ approval:
   min_checks: 6
   min_probe_locations: 2
   require_segment: true
-  max_per_run: 50
+  # 100 (было 50): priority-очередь home-ru даёт до ~300 готовых кандидатов
+  # в ночь, лимит 50 стал бутылочным горлом роста плейлиста. Ревью
+  # масштабируется по источникам — PR группируется по source_id с чек-листом
+  # прав (docs/SOURCE_POLICY.md → Реестр источников). Контроль качества через
+  # неделю: доля approved в stale/deny, жалобы на чужой EPG; чисто — 150
+  # (рост тогда ограничит throughput home-ru ~300/ночь, а не лимит).
+  max_per_run: 100

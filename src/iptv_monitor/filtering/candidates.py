@@ -37,6 +37,9 @@ class ApprovalCandidate:
     checks: int
     probe_locations: list[str] = field(default_factory=list)
     segment_ok: bool = False
+    # Источник происхождения (issue: группировка PR по источникам —
+    # ревью прав масштабируется по источникам, а не по потокам).
+    source_id: str = ""
 
 
 def _blocked_only_by_review(reasons: list[str]) -> bool:
@@ -99,6 +102,7 @@ def find_candidates(
                 checks=score.checks,
                 probe_locations=success_locations,
                 segment_ok=segment_ok,
+                source_id=stream.source_id,
             )
         )
 
@@ -118,6 +122,7 @@ def candidates_to_dicts(candidates: Iterable[ApprovalCandidate]) -> list[dict[st
             "checks": c.checks,
             "probe_locations": c.probe_locations,
             "segment_ok": c.segment_ok,
+            "source_id": c.source_id,
         }
         for c in candidates
     ]

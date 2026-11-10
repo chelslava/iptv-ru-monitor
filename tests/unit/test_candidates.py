@@ -5,7 +5,7 @@ from __future__ import annotations
 from iptv_monitor.domain.channel import Channel
 from iptv_monitor.domain.enums import QualityLevel
 from iptv_monitor.domain.stream import Stream, make_stream_id
-from iptv_monitor.filtering import decide_publication, find_candidates
+from iptv_monitor.filtering import candidates_to_dicts, decide_publication, find_candidates
 from iptv_monitor.filtering.candidates import ApprovalCandidate
 from iptv_monitor.scoring.quality import StreamScore, score_stream
 from iptv_monitor.settings import ApprovalSettings, QualityLevels, QualityWeights
@@ -299,3 +299,22 @@ def test_order_streams_deterministic_by_successes() -> None:
     ordered = order_streams_for_approval([a, b], history, set(), probe_location="home-ru")
     # оба готовы; больше успешных проверок извне — выше
     assert [s.stream_id for s in ordered] == [b.stream_id, a.stream_id]
+
+
+def test_candidates_include_source_id() -> None:
+    """source_id пробрасывается в кандидатов — группировка PR по источникам."""
+    stream = _stream("https://ok.example/src.m3u8")
+    histories = {stream.stream_id: _history_for(stream, ["github-runner", "home-ru"])}
+    channel, decisions, scores, history = _build([stream], histories)
+
+    candidates = find_candidates(
+        approval=APPROVAL,
+        channels=[channel],
+        streams=[stream],
+        scores=scores,
+        decisions=decisions,
+        history=history,
+    )
+    assert len(candidates) == 1
+    assert candidates[0].source_id == "src-review"
+    assert candidates_to_dicts(candidates)[0]["source_id"] == "src-review"

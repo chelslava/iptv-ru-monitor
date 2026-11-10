@@ -68,30 +68,52 @@ jobs:
           git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null || true
           git push origin "$BRANCH" --force-with-lease
 
+          # PR/issue группируются по источникам (max_per_run=100): ревью прав
+          # масштабируется по источникам (4-5 шт.), а не по потокам.
           python - <<'PY' > pr_body.md
           import json
+          from collections import defaultdict
 
           candidates = json.load(open("data/state/candidates.json", encoding="utf-8"))
+          by_source = defaultdict(list)
+          for c in candidates:
+              by_source[c.get("source_id") or "unknown"].append(c)
+
           lines = [
               "Автоматически подготовленные кандидаты на подтверждение публикации.",
               "",
-              "Критерии: score >= 75, проверок >= 6, успех минимум из двух точек",
-              "наблюдения, HLS-сегмент получен (`config/quality_profiles.yaml -> approval`).",
-              "",
-              "| Канал | stream_id | Score | Уровень | Проверок | Точки |",
-              "|---|---|---|---|---|---|",
-          ]
-          for c in candidates:
-              lines.append(
-                  f"| {c['channel']} | `{c['stream_id']}` | {c['score']} | "
-                  f"{c['level']} | {c['checks']} | {', '.join(c['probe_locations'])} |"
-              )
-          lines += [
+              f"Всего: **{len(candidates)}** (max_per_run=100). Критерии: score >= 75,",
+              "проверок >= 6, успех минимум из двух точек наблюдения, HLS-сегмент",
+              "получен (`config/quality_profiles.yaml -> approval`).",
               "",
               "**Merge PR = подтверждение** двух вещей:",
-              "1. технического состояния потоков (таблица выше);",
-              "2. прав источника — выполнен чек-лист [docs/SOURCE_POLICY.md](../../blob/main/docs/SOURCE_POLICY.md).",
+              "1. технического состояния потоков (таблицы ниже по источникам);",
+              "2. прав **каждого источника** из списков — чек-лист и статус:",
+              "[docs/SOURCE_POLICY.md → Реестр источников](../../blob/main/docs/SOURCE_POLICY.md#реестр-источников).",
               "",
+              "| Источник | Кандидатов | Score | Таблица |",
+              "|---|---|---|---|",
+          ]
+          for source in sorted(by_source):
+              group = by_source[source]
+              scores = [c["score"] for c in group]
+              lines.append(
+                  f"| `{source}` | {len(group)} | {min(scores)}–{max(scores)} | ниже |"
+              )
+          lines.append("")
+          for source in sorted(by_source):
+              group = by_source[source]
+              lines.append(f"### Источник `{source}` — {len(group)} шт.")
+              lines.append("")
+              lines.append("| Канал | stream_id | Score | Уровень | Проверок | Точки |")
+              lines.append("|---|---|---|---|---|---|")
+              for c in group:
+                  lines.append(
+                      f"| {c['channel']} | `{c['stream_id']}` | {c['score']} | "
+                      f"{c['level']} | {c['checks']} | {', '.join(c['probe_locations'])} |"
+                  )
+              lines.append("")
+          lines += [
               "Следующая сборка включит потоки в плейлисты. Полные данные:",
               "`iptv-monitor candidates` локально или `data/state/candidates.json`.",
           ]
@@ -103,25 +125,33 @@ jobs:
           python - <<'PY' > issue_body.md
           import json
           import os
+          from collections import defaultdict
 
           repo = os.environ["GITHUB_REPOSITORY"]
           branch = os.environ["BRANCH"]
           candidates = json.load(open("data/state/candidates.json", encoding="utf-8"))
+          by_source = defaultdict(list)
+          for c in candidates:
+              by_source[c.get("source_id") or "unknown"].append(c)
+
           lines = [
               "Автоматически подготовленные кандидаты на подтверждение публикации.",
               "",
-              "Критерии: score >= 75, проверок >= 6, успех минимум из двух точек",
-              "наблюдения, HLS-сегмент получен (`config/quality_profiles.yaml -> approval`).",
+              f"Всего: **{len(candidates)}** (max_per_run=100). Критерии: score >= 75,",
+              "проверок >= 6, успех минимум из двух точек наблюдения, HLS-сегмент",
+              "получен (`config/quality_profiles.yaml -> approval`).",
               "",
-              "| Канал | stream_id | Score | Уровень | Проверок | Точки |",
-              "|---|---|---|---|---|---|",
+              "| Источник | Кандидатов | Score |",
+              "|---|---|---|",
           ]
-          for c in candidates:
-              lines.append(
-                  f"| {c['channel']} | `{c['stream_id']}` | {c['score']} | "
-                  f"{c['level']} | {c['checks']} | {', '.join(c['probe_locations'])} |"
-              )
+          for source in sorted(by_source):
+              group = by_source[source]
+              scores = [c["score"] for c in group]
+              lines.append(f"| `{source}` | {len(group)} | {min(scores)}–{max(scores)} |")
           lines += [
+              "",
+              "Полные таблицы по источникам — в PR (см. ссылку ниже). Чек-лист прав",
+              "каждого источника: [docs/SOURCE_POLICY.md → Реестр источников](../../blob/main/docs/SOURCE_POLICY.md#реестр-источников).",
               "",
               "**Подтверждение:** откройте PR по ссылке, проверьте diff и чек-лист прав",
               "в docs/SOURCE_POLICY.md, затем смержите — следующая сборка включит",
