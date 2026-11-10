@@ -106,3 +106,55 @@ def test_index_html_includes_catalog_search() -> None:
         last_generated="2026-11-10 08:00",
     )
     assert 'id="catalog-search"' not in page_min
+
+
+def test_index_html_includes_player_layer() -> None:
+    """Каталог содержит плеер-слой: модалка, streams.json, кнопка ▶ (плеер MVP)."""
+    from iptv_monitor.generators.report import render_index_html
+
+    page = render_index_html(
+        site_title="iptv-ru-monitor — RU",
+        playlists=[
+            {"title": "Основной", "filename": "russia.m3u", "url": "ru/russia.m3u", "included": 5}
+        ],
+        report_path="ru/report.json",
+        last_generated="2026-11-10 08:00",
+        catalog_path="ru/channels.json",
+    )
+    # модалка плеера и его скрипт
+    assert 'id="iptv-player"' in page
+    assert 'id="iptv-player-video"' in page
+    assert "../assets/player.js" in page
+    # третий источник данных — streams.json (URL только включённых потоков)
+    assert 'fetch("ru/streams.json")' in page
+    # ссылка плейлиста в модалке — относительное имя файла
+    assert 'href="russia.m3u">Плейлист (M3U)</a>' in page
+    # кандидаты: только включённые HLS-потоки, сортировка по score/uptime
+    assert 'protocol !== "hls"' in page
+    assert ".play-btn" in page
+    # без catalog_path плеера тоже нет
+    page_min = render_index_html(
+        site_title="x",
+        playlists=[],
+        report_path="ru/report.json",
+        last_generated="2026-11-10 08:00",
+    )
+    assert 'id="iptv-player"' not in page_min
+    assert "../assets/player.js" not in page_min
+
+
+def test_static_assets_vendored() -> None:
+    """Вендоренные статики плеера существуют и не пусты (см. static/README.md)."""
+    from pathlib import Path
+
+    static_dir = (
+        Path(__file__).resolve().parents[2] / "src" / "iptv_monitor" / "generators" / "static"
+    )
+    hls = static_dir / "hls.light.min.js"
+    player = static_dir / "player.js"
+    assert hls.is_file() and hls.stat().st_size > 100_000  # лёгкая сборка hls.js
+    assert player.is_file() and player.stat().st_size > 1_000
+    player_src = player.read_text(encoding="utf-8")
+    assert "window.IptvPlayer" in player_src  # публичное API для страницы
+    assert "recoverMediaError" in player_src  # failover MEDIA-ошибок
+    assert "data-channel" not in player_src  # клики ▶ живут на странице, не в плеере

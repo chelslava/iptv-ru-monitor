@@ -12,6 +12,8 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+# ZCode (локальные настройки сессий агента)
+.zcode/
 
 # Environment
 .env

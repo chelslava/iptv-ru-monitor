@@ -209,11 +209,16 @@ def render_index_html(
     top_block = ""
     catalog_block = ""
     if catalog_path:
+        # Плеер-слой (см. generators/static/README.md): URL берём только из
+        # уже публикуемого streams.json, новые данные не раскрываем.
+        streams_path = report_path.replace("report.json", "streams.json")
+        playlist_href = str(playlists[0].get("filename", "#")) if playlists else "#"
         catalog_block = f"""
 <h2>Каталог каналов</h2>
 <p>Поиск по каталогу и состоянию потоков. Источники данных:
 <a href="{html.escape(catalog_path)}">channels.json</a>,
-<a href="{html.escape(report_path)}">report.json</a>.</p>
+<a href="{html.escape(report_path)}">report.json</a>,
+<a href="{html.escape(streams_path)}">streams.json</a>.</p>
 <p>
   <input id="catalog-search" type="search" placeholder="Поиск канала…"
          autocomplete="off" style="padding:.4rem .6rem; min-width: 16rem;">
@@ -227,6 +232,26 @@ def render_index_html(
 <th>Uptime 30д</th></tr></thead>
 <tbody id="catalog-body"><tr><td colspan="6">Загрузка каталога…</td></tr></tbody>
 </table>
+<div id="iptv-player">
+  <div id="iptv-player-box">
+    <div id="iptv-player-head">
+      <img id="iptv-player-logo" alt="" width="28" height="28">
+      <span id="iptv-player-name"></span>
+      <button type="button" id="iptv-player-close" title="Закрыть (Esc)">✕</button>
+    </div>
+    <video id="iptv-player-video" controls playsinline preload="none"></video>
+    <div id="iptv-player-status"></div>
+    <div id="iptv-player-error" style="display:none;"></div>
+    <div id="iptv-player-log"></div>
+    <div id="iptv-player-actions">
+      <button type="button" id="iptv-player-next">Следующий поток</button>
+      <button type="button" id="iptv-player-copy">Копировать URL</button>
+      <a id="iptv-player-vlc" href="#">Открыть в VLC</a>
+      <a id="iptv-player-playlist" href="{html.escape(playlist_href)}">Плейлист (M3U)</a>
+    </div>
+  </div>
+</div>
+<script src="../assets/player.js" defer></script>
 <script>
 (function () {{
   "use strict";
@@ -241,7 +266,8 @@ def render_index_html(
   }}
   Promise.all([
     fetch("{html.escape(catalog_path)}").then(function (r) {{ return r.json(); }}),
-    fetch("{html.escape(report_path)}").then(function (r) {{ return r.json(); }})
+    fetch("{html.escape(report_path)}").then(function (r) {{ return r.json(); }}),
+    fetch("{html.escape(streams_path)}").then(function (r) {{ return r.json(); }})
   ]).then(function (results) {{
     var channels = results[0] || [];
     var reportByChannel = {{}};
@@ -253,17 +279,44 @@ def render_index_html(
         reportByChannel[s.channel_id] = s;
       }}
     }});
+    var reportByStream = {{}};
+    (results[1] && results[1].streams || []).forEach(function (s) {{
+      reportByStream[s.stream_id] = s;
+    }});
+    // Кандидаты для плеера: включённые HLS-потоки (URL есть только у них).
+    // Порядок — по score, затем по uptime 30д: failover идёт по этому
+    // порядку, от лучшего по данным мониторинга к следующему.
+    var playableByChannel = {{}};
+    (results[2] || []).forEach(function (s) {{
+      if (!s.included || !s.url || s.protocol !== "hls") return;
+      var rep = reportByStream[s.stream_id] || {{}};
+      (playableByChannel[s.channel_id] = playableByChannel[s.channel_id] || []).push({{
+        url: s.url,
+        score: s.score,
+        uptime: rep.uptime_30d_percent != null ? rep.uptime_30d_percent : rep.uptime_7d_percent,
+        source_id: s.source_id
+      }});
+    }});
+    Object.keys(playableByChannel).forEach(function (cid) {{
+      playableByChannel[cid].sort(function (a, b) {{
+        return (b.score || 0) - (a.score || 0) || (b.uptime || 0) - (a.uptime || 0);
+      }});
+    }});
     var seenCategories = {{}};
+    var channelById = {{}};
     var rows = channels.map(function (c) {{
       if (c.category && !seenCategories[c.category]) seenCategories[c.category] = true;
+      channelById[c.channel_id] = c;
       var r = reportByChannel[c.channel_id] || {{}};
       return {{
+        channelId: c.channel_id,
         name: c.name || "",
         category: c.category || "",
         logo: c.logo_url || "",
         level: r.level || null,
         score: r.score,
-        uptime: r.uptime_30d_percent
+        uptime: r.uptime_30d_percent,
+        playable: playableByChannel[c.channel_id] || null
       }};
     }});
     var catSelect = document.getElementById("catalog-category");
@@ -290,11 +343,15 @@ def render_index_html(
         var logo = row.logo
           ? '<img src="' + esc(row.logo) + '" alt="" width="24" height="24" loading="lazy">'
           : "";
+        var playBtn = row.playable
+          ? '<button type="button" class="play-btn" data-channel="' +
+            esc(row.channelId) + '" title="Смотреть в браузере">▶</button>'
+          : "";
         var label = row.level ? (LEVEL_LABEL[row.level] || row.level) : "";
         var badge = row.level
           ? '<span class="badge badge-' + esc(row.level) + '">' + esc(label) + "</span>"
           : "—";
-        html += "<tr><td>" + logo + "</td><td>" + esc(row.name) + "</td><td>" +
+        html += "<tr><td>" + playBtn + logo + "</td><td>" + esc(row.name) + "</td><td>" +
           esc(row.category) + "</td><td>" + badge + "</td><td>" +
           (row.score == null ? "—" : row.score) + "</td><td>" +
           (row.uptime == null ? "—" : row.uptime + "%") + "</td></tr>";
@@ -304,6 +361,21 @@ def render_index_html(
     }}
     search.addEventListener("input", render);
     catFilter.addEventListener("change", render);
+    // Кнопка ▶: делегирование, плеер получает уже отсортированных кандидатов.
+    body.addEventListener("click", function (e) {{
+      var btn = e.target.closest ? e.target.closest(".play-btn") : null;
+      if (!btn || !window.IptvPlayer) return;
+      var cid = btn.getAttribute("data-channel");
+      var cands = playableByChannel[cid];
+      if (!cands) return;
+      var c = channelById[cid] || {{}};
+      window.IptvPlayer.open({{
+        name: c.name || "",
+        logo: c.logo_url || "",
+        candidates: cands,
+        playlistUrl: "{html.escape(playlist_href)}"
+      }});
+    }});
     render();
   }});
 }})();
@@ -313,6 +385,30 @@ def render_index_html(
   .badge-excellent, .badge-good {{ background: #dafbe1; color: #116329; }}
   .badge-unstable {{ background: #fff8c5; color: #7d4e00; }}
   .badge-failed {{ background: #ffebe9; color: #82071e; }}
+  .play-btn {{ border: 1px solid #d0d7de; background: #f6f8fa; border-radius: 6px;
+        cursor: pointer; margin-right: .4rem; padding: .1rem .45rem; }}
+  #iptv-player {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+        z-index: 100; align-items: center; justify-content: center; padding: 1rem; }}
+  #iptv-player-box {{ background: #fff; border-radius: 10px; max-width: 52rem;
+        width: 100%; padding: 1rem; }}
+  #iptv-player-head {{ display: flex; align-items: center; gap: .5rem;
+        margin-bottom: .5rem; }}
+  #iptv-player-name {{ font-weight: 600; flex: 1; }}
+  #iptv-player-close {{ border: 1px solid #d0d7de; background: #f6f8fa;
+        border-radius: 6px; cursor: pointer; }}
+  #iptv-player-video {{ width: 100%; aspect-ratio: 16 / 9; background: #000;
+        border-radius: 6px; }}
+  #iptv-player-status {{ color: #57606a; font-size: .9rem; margin: .5rem 0; }}
+  #iptv-player-error {{ background: #ffebe9; color: #82071e;
+        padding: .5rem .75rem; border-radius: 6px; margin: .5rem 0;
+        font-size: .9rem; }}
+  #iptv-player-log {{ color: #7d4e00; font-size: .85rem; }}
+  #iptv-player-log div {{ padding: .1rem 0; }}
+  #iptv-player-actions {{ display: flex; flex-wrap: wrap; gap: .5rem;
+        margin-top: .5rem; }}
+  #iptv-player-actions button, #iptv-player-actions a {{ padding: .35rem .8rem;
+        border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa;
+        color: inherit; text-decoration: none; font-size: .9rem; cursor: pointer; }}
 </style>
 """
     if stats:

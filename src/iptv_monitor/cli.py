@@ -6,6 +6,7 @@ import asyncio
 import gzip
 import json
 import logging
+import shutil
 import xml.etree.ElementTree as ET
 from collections import Counter
 from datetime import datetime
@@ -137,6 +138,21 @@ def _load_channels(settings: AppSettings) -> list[Channel]:
 
 def _load_streams(settings: AppSettings) -> list[Stream]:
     return [Stream.model_validate(item) for item in _load_state(settings, STATE_STREAMS)]
+
+
+def _publish_static_assets(settings: AppSettings) -> Path:
+    """Вендоренные статики плеера (hls.js, player.js) -> dist/assets.
+
+    Один экземпляр на все страны: страницы стран подключают ../assets/.
+    README копируется вместе с кодом — атрибуция Apache-2.0 уезжает на сайт.
+    """
+    static_dir = Path(__file__).resolve().parent / "generators" / "static"
+    assets_dir = settings.dist_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    for src in sorted(static_dir.iterdir()):
+        if src.is_file():
+            shutil.copy2(src, assets_dir / src.name)
+    return assets_dir
 
 
 # --- Этапы конвейера ---------------------------------------------------------
@@ -865,6 +881,8 @@ def run_build(
 
     # Индексная страница.
     settings.dist_dir.mkdir(parents=True, exist_ok=True)
+    # Вендоренные статики плеера — один экземпляр на все страны (dist/assets).
+    _publish_static_assets(settings)
     # Страновая страница: поиск работает по каталогу своей страны,
     # пути относительные (волна 3). Корневой index.html — hub ссылок
     # на страны: раньше его перезаписывала последняя собранная страна,
