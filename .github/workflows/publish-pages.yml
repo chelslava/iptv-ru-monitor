@@ -2,11 +2,17 @@ name: Publish Pages
 
 # Публикация собранных артефактов (dist) на GitHub Pages.
 # Требование: Settings → Pages → Source → GitHub Actions.
+#
+# Сцеплено со сборкой (workflow_run): каждая успешная build-playlists
+# сразу публикуется — без ожидания отложенных крон-часов. Крон — fallback.
 
 on:
+  workflow_run:
+    workflows: ["Build playlists"]
+    types: [completed]
   workflow_dispatch:
   schedule:
-    - cron: "0 10 * * *" # ежедневно после сборки (время не гарантировано)
+    - cron: "0 10 * * *" # ежедневно, резерв на случай сбоя сцепки
 
 permissions:
   contents: read
@@ -22,6 +28,7 @@ jobs:
   publish:
     name: Publish dist to GitHub Pages
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

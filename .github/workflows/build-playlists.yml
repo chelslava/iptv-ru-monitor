@@ -2,11 +2,19 @@ name: Build playlists
 
 # Объединение результатов проверок (GitHub runner + RU VDS),
 # скоринг и генерация плейлистов/отчётов.
+#
+# Запуск сцеплен с проверками (workflow_run): каждая успешная проверка
+# check-global сразу даёт свежую сборку и публикацию, без ожидания
+# отложенных крон-часов (2026-11-10: GitHub задерживал schedule на часы —
+# страница показывала вчерашний снапшот). Крон остаётся fallback.
 
 on:
+  workflow_run:
+    workflows: ["Check global"]
+    types: [completed]
   workflow_dispatch:
   schedule:
-    - cron: "30 8 * * *" # ежедневно после проверок (время не гарантировано)
+    - cron: "30 8 * * *" # ежедневно, резерв на случай сбоя сцепки
 
 permissions:
   contents: read
@@ -21,6 +29,7 @@ jobs:
   build:
     name: Merge results and build dist
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -59,6 +68,27 @@ jobs:
           print(f"home-ru: последняя проверка {latest.isoformat()} ({age_h:.1f} ч назад)")
           if age_h > 36:
               sys.exit(f"::error::home-ru данные старше 36 ч ({age_h:.0f} ч) — домашний прогон молчит")
+          PY
+
+      - name: "Guard: github-runner freshness"
+        # Ранний сигнал «проверки github-runner перестали приходить»:
+        # слоты задерживаются кроном GitHub (best-effort), 30 ч —
+        # четыре пропущенных 6-часовых интервала.
+        run: |
+          f=data/state/checks.jsonl
+          latest=$(grep '"probe_location":"github-runner"' "$f" \
+            | grep -o '"checked_at":"[^"]*"' | sort | tail -1 | cut -d'"' -f4 || true)
+          if [[ -z "$latest" ]]; then
+            echo "::error::github-runner: данных нет вовсе" >&2
+            exit 1
+          fi
+          python3 - "$latest" <<'PY'
+          import datetime, sys
+          latest = datetime.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+          age_h = (datetime.datetime.now(datetime.timezone.utc) - latest).total_seconds() / 3600
+          print(f"github-runner: последняя проверка {latest.isoformat()} ({age_h:.1f} ч назад)")
+          if age_h > 30:
+              sys.exit(f"::error::github-runner данные старше 30 ч ({age_h:.0f} ч) — проверки остановились")
           PY
 
       - name: Refresh catalog and enrich
