@@ -4,11 +4,19 @@ name: Approve candidates
 # поток с рейтингом, проверенный из двух точек наблюдения и отдавший
 # HLS-сегмент. Create PR -> человек ревьюит diff и мержит.
 # Merge PR = подтверждение; следующая сборка включает потоки в плейлисты.
+#
+# Запуск сцеплен с проверками (workflow_run, 2026-11-11): каждая успешная
+# проверка check-global (4 слота в сутки) сразу выносит новых кандидатов
+# в PR, вместо одного запуска в сутки с задержкой крона на часы.
+# Крон остаётся fallback на случай сбоя сцепки.
 
 on:
+  workflow_run:
+    workflows: ["Check global"]
+    types: [completed]
   workflow_dispatch:
   schedule:
-    - cron: "30 9 * * *" # ежедневно после сборки плейлистов (время не гарантировано)
+    - cron: "30 9 * * *" # ежедневно, резерв на случай сбоя сцепки
 
 permissions:
   contents: write
@@ -24,6 +32,9 @@ jobs:
   propose:
     name: Propose approval candidates
     runs-on: ubuntu-latest
+    # workflow_run.conclusion пуст для schedule/dispatch — без этого условия
+    # крон- и dispatch-запуски пропускались бы (см. build-playlists.yml).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     env:
       BRANCH: chore/approve-candidates
     steps:
