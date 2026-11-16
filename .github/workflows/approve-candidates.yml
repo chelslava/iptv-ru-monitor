@@ -79,6 +79,17 @@ jobs:
           git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null || true
           git push origin "$BRANCH" --force-with-lease
 
+          # PR для ветки уже открыт (ждёт мерджа)? gh pr create при этом падает
+          # с «already exists», что раньше ошибочно трактовалось как запрет PR
+          # и уводило кандидатов в issue (issue #32). Ветка выше запушена —
+          # diff открытого PR уже содержит новых кандидатов, дублировать
+          # предложение в issue не нужно.
+          open_pr_url=$(gh pr view "$BRANCH" --json state,url --jq 'select(.state == "OPEN") | .url' 2>/dev/null || true)
+          if [[ -n "$open_pr_url" ]]; then
+            echo "PR уже открыт, новые кандидаты в его diff: $open_pr_url"
+            exit 0
+          fi
+
           # PR/issue группируются по источникам (max_per_run=100): ревью прав
           # масштабируется по источникам (4-5 шт.), а не по потокам.
           python - <<'PY' > pr_body.md
@@ -180,8 +191,15 @@ jobs:
             --title "chore(approval): кандидаты к публикации (${ADDED})" \
             --body-file pr_body.md; then
             echo "PR создан"
+            # Закрыть fallback-issue прошлых сбоев: предложение продолжилось в PR.
+            fallback=$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+              --search "in:title Кандидаты к публикации" --json number --jq '.[0].number // empty')
+            if [[ -n "$fallback" ]]; then
+              gh issue close "$fallback" \
+                --comment "Кандидаты оформлены в PR — issue закрыт как дублирующий."
+            fi
           else
-            echo "Создание PR запрещено настройкой репозитория — оформляю issue"
+            echo "gh pr create не удался (причина в логе выше) — оформляю issue"
             existing=$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
               --search "in:title Кандидаты к публикации" --json number --jq '.[0].number // empty')
             if [[ -n "$existing" ]]; then
