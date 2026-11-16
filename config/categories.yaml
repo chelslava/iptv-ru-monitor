@@ -3,6 +3,11 @@
 # Первый подходящий паттерн выигрывает; порядок важен.
 
 categories:
+  # adult — первым: каналы 18+ встречаются в агрегаторах (GoodTV «Взрослые
+  # 18+» и т. п.) и не должны уезжать в новости/развлекательные по имени.
+  # Исключаются из публичных сборок профилями (exclude_categories).
+  - category: adult
+    patterns: ["18+", "взросл", "adult", "xxx", "порно", "эрот", "erotic", "porn", "brazzers", "dorcel", "eroxxx", "hustler", "playboy"]
   - category: news
     patterns: ["новост", "news", "информацион", "вечерн"]
   - category: kids

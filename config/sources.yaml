@@ -76,6 +76,35 @@ sources:
     # неясны -> review), курируется против платных подписок; 59 записей
     # (group-title="Russia"), маркеры Ⓢ/Ⓖ в названиях очищаются clean_display_name.
 
+  - id: goodtv
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/Alexander2045820/GoodTV/main/GoodTV/GoodTV.m3u"
+    # Проверено 2026-11-16: 688 записей (155 региональных, федеральные, кино,
+    # новости, музыка, радио, детские), 0 секретных URL, UTF-8, хосты
+    # rutube/ngenix/catcast/ntv — без зеркал платных сервисов. Лицензия MIT
+    # (репозиторий Alexander2045820/GoodTV, обновляется ежедневно). Группа
+    # «Взрослые 18+» (~37 каналов) классифицируется категорией adult и
+    # исключается из публичных сборок (exclude_categories в профилях);
+    # публикация каждого потока всё равно требует approval.
+
+  - id: artem-ru
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/artem-art998/IPTVru/main/iptv126.m3u"
+    # Проверено 2026-11-16: 317 записей без group-title/tvg-id (категории
+    # определятся по имени), ~7 секретных URL отсекаются политикой. Ценность —
+    # нишевые региональные (Тыва, Томское время, Надежда, Союз). Хосты
+    # смешанные (rutube, ttk.mx, vintera, личные домены). Лицензии у
+    # репозитория нет — только review; репозиторий активен (обновления
+    # еженедельно).
+
   - id: custom-local
     adapter: custom_m3u
     enabled: true

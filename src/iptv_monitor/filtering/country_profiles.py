@@ -69,6 +69,12 @@ def select_streams(
         if profile.categories is not None and channel.category not in profile.categories:
             reasons.append(f"category {channel.category} not in profile")
 
+        if (
+            profile.exclude_categories is not None
+            and channel.category in profile.exclude_categories
+        ):
+            reasons.append(f"category {channel.category} excluded by profile")
+
         if profile.min_height is not None:
             height = best_heights.get(stream.stream_id)
             if height is None or height < profile.min_height:

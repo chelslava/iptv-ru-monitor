@@ -22,11 +22,16 @@ profiles:
     country: RU
     min_score: 50
     min_checks: 5
+    # exclude_categories (issue: агрегатор GoodTV): каналы 18+ не публикуются
+    # в основных плейлистах независимо от score (ru_kids/ru_sport закрыты
+    # включающим списком categories).
+    exclude_categories: [adult]
   ru_hd:
     country: RU
     min_score: 75
     min_checks: 8
     min_height: 720 # в последних успешных проверках
+    exclude_categories: [adult]
   ru_kids:
     country: RU
     min_score: 75
@@ -43,6 +48,7 @@ profiles:
     country: UZ
     min_score: 50
     min_checks: 5
+    exclude_categories: [adult]
 
 # Кандидаты на подтверждение публикации (iptv-monitor candidates и workflow
 # approve-candidates). Поток становится кандидатом, если набрал рейтинг,

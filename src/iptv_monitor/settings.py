@@ -249,6 +249,7 @@ class QualityProfileSettings(BaseModel):
     min_checks: int = 5
     min_height: int | None = None
     categories: list[Category] | None = None
+    exclude_categories: list[Category] | None = None
 
 
 class QualityFile(BaseModel):

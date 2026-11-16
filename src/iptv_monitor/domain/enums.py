@@ -34,6 +34,7 @@ class Category(StrEnum):
     """Категория канала."""
 
     GENERAL = "general"
+    ADULT = "adult"
     NEWS = "news"
     KIDS = "kids"
     SPORTS = "sports"
