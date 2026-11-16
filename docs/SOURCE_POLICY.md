@@ -95,6 +95,36 @@
 | Включение в публичный плейлист | `review` (включён 2026-11-16) |
 | Дата последней проверки условий | 2026-11-16 |
 
+| Поле | Значение |
+|------|----------|
+| id | `substanc-ru` |
+| URL | `https://raw.githubusercontent.com/substanc1/iptv-russia/main/streams/ru.m3u` |
+| Тип данных | M3U, 686 записей, tvg-id у 99%, без group-title (категории по имени); хосты — общий пул бесплатных CDN (mcquack, uplink.kz, cinerama.uz, smotrim, ngenix); ~73 секретных URL (fs.uplink.kz?token=onlinetv) исключаются автоматически; ~2,6% записей — зеркала платных каналов (365 дней ТВ, Amedia Hit, Dom Kino Premium, Gulli Girl) — плотность сопоставима с уже включёнными источниками (iptv-org-ru сам раздаёт fs.uplink.kz и 185.23.80.23), публикация каждого потока только через approval |
+| Лицензия/условия | **Unlicense** (репозиторий [substanc1/iptv-russia](https://github.com/substanc1/iptv-russia)), активен (обновление 2026-11-15) |
+| Переиспользование | разрешено лицензией; включён с `review` до первой проверки потоков |
+| Включение в публичный плейлист | `review` (включён 2026-11-16) |
+| Дата последней проверки условий | 2026-11-16 |
+
+| Поле | Значение |
+|------|----------|
+| id | `tvrus-ru` |
+| URL | `https://raw.githubusercontent.com/tv-rus/tv-rus.github.io/main/docs/playlists/all.m3u` |
+| Тип данных | M3U, 304 записи, 100% с tvg-id и group-title (Федеральные/Региональные/Кино и сериалы/Новости/Познавательные/Детские/Музыка/Спорт/Религия); 2 секретных URL; хосты mcquack/smotrim/ntv.ru — без операторов платных сервисов; раздача через GitHub Pages (проект tv-rus.github.io) |
+| Лицензия/условия | **LICENSE у репозитория отсутствует**; репозиторий молодой (создан 2026-11-10), активен (обновление 2026-11-14) |
+| Переиспользование | явно не разрешено — только `review` |
+| Включение в публичный плейлист | `review` (включён 2026-11-16). Список на ~91% дублирует каталог (последний в порядке ротации): после discover 2026-11-16 закреплён 1 поток, остальные URL принадлежат более ранним источникам; ценность — курируемые tvg-id/group-title и независимое обновление |
+| Дата последней проверки условий | 2026-11-16 |
+
+| Поле | Значение |
+|------|----------|
+| id | `dvinov-spb` |
+| URL | `https://raw.githubusercontent.com/dvinokurov80/iptv-russia-spb/main/playlist.m3u` |
+| Тип данных | M3U, 215 записей (общероссийские + петербургские и региональные, включая vod.tuva.ru, mylifeisgood); group-title 100%, tvg-id 72%; ~13 секретных URL исключаются автоматически; хосты mcquack/catcast/uplink.kz — без операторов платных сервисов |
+| Лицензия/условия | **LICENSE у репозитория отсутствует**; активен (обновление 2026-11-16) |
+| Переиспользование | явно не разрешено — только `review` |
+| Включение в публичный плейлист | `review` (включён 2026-11-16). На ~98% дублирует каталог (последний в порядке ротации): после discover 2026-11-16 закреплено 4 потока; ценность — СПб/региональная курируемость и независимое обновление |
+| Дата последней проверки условий | 2026-11-16 |
+
 Аналогичные записи обязательны для EPG-источников (`config/epg_sources.yaml`)
 и источников логотипов (`config/logo_sources.yaml`): лицензия гайдов и
 изображений не переиспользуется автоматически.
@@ -144,6 +174,15 @@
 |----------|--------|---------|
 | [Alexander2045820/GoodTV](https://github.com/Alexander2045820/GoodTV) | MIT-лицензия, обновляется ежедневно; 688 записей, 0 секретных URL; группа 18+ изолируется категорией | **Включён 2026-11-16** с `public_policy: review` |
 | [artem-art998/IPTVru](https://github.com/artem-art998/IPTVru) | активен; 317 записей, много региональных; LICENSE отсутствует, ~7 секретных URL | **Включён 2026-11-16** с `public_policy: review` |
+| [substanc1/iptv-russia](https://github.com/substanc1/iptv-russia) | Unlicense, активен (2026-11-15); 686 записей, tvg-id 99%, ~73 секретных URL отсекаются; ~2,6% зеркал платных каналов — плотность как у включённых источников | **Включён 2026-11-16** с `public_policy: review` (id `substanc-ru`, ~200 новых URL) |
+| [tv-rus/tv-rus.github.io](https://github.com/tv-rus/tv-rus.github.io) | курируемый RU-плейлист через GitHub Pages; 304 записи, tvg-id/group-title 100%, 2 секретных URL; LICENSE отсутствует, репозиторий молодой (2026-11-10) | **Включён 2026-11-16** с `public_policy: review` (id `tvrus-ru`; ~91% дубликатов, закреплён 1 поток — ценность в курируемом tvg-id/group-title и независимом обновлении) |
+| [dvinokurov80/iptv-russia-spb](https://github.com/dvinokurov80/iptv-russia-spb) | активен (2026-11-16); 215 записей (общефедеральные + СПб/регионы), group-title 100%, ~13 секретных URL; LICENSE отсутствует | **Включён 2026-11-16** с `public_policy: review` (id `dvinov-spb`; ~98% дубликатов, закреплено 4 потока — ценность в СПб/региональной курируемости) |
+| [SNICKERS741/SNICKERSTV](https://github.com/SNICKERS741/SNICKERSTV) | создан на день позже substanc1, 99% URL совпадают с substanc1/iptv-russia; LICENSE отсутствует | Отклонён: дубликат уже включённого списка |
+| [kipirceni-ship-it/my-iptv](https://github.com/kipirceni-ship-it/my-iptv) | 47 записей, ~17% — зеркала платных каналов (Amedia Premium/Hit, viju+ Serial, Мир сериала, Velvet) | Отклонён: доминируют платные зеркала (чек-лист п. 4) |
+| [Dmitriy11223455/iptv-updater-viks.tv](https://github.com/Dmitriy11223455/iptv-updater-viks.tv) | 4 записи, URL напрямую на s.viks.tv / s.ontivi.net — порталы платной подписки | Отклонён: зеркала платного сервиса (запрещено политикой) |
+| [slawa99-prog/sv-iptv](https://github.com/slawa99-prog/sv-iptv) | 452 записи, но имена битые (UA/VLC-опции вклеены в display-name), 28 секретных URL, есть зеркала Матч Футбол 2/3 HD | Отклонён: качество метаданных + платные спортивные зеркала |
+| [AvedEd/russia-iptv](https://github.com/AvedEd/russia-iptv) | автогенерат поверх iptv-org (имена с тегами `[iptv-org...]`), 88% URL уже в каталоге, LICENSE отсутствует | Отклонён: дублирование iptv-org-ru без добавленной ценности |
+| [Nikolaibrasas/russian-hd-iptv](https://github.com/Nikolaibrasas/russian-hd-iptv) | однокоммитный дамп от 2026-10-11 (5 недель без обновлений), 89% URL — дубли, LICENSE отсутствует | Отклонён: низкая живость + дублирование |
 | [iptvru/iptv](https://github.com/iptvru/iptv) | 917 записей, но не обновляется с 2023-09; хосты ottclub.xyz/okkotv/uma.media — **зеркало платных сервисов**; 63 секретных URL | Отклонён: зеркала платных каналов без прав (чек-лист п. 4) |
 | [anthonyaxenov/iptv (axenov)](https://github.com/anthonyaxenov/iptv) | агрегатор переехал на git.axenov.dev; `iptv.axenov.dev/raw` редиректит на `m3u.su/raw` | Не добавлять: дубль уже отклонённого m3u.su |
 | [rebeliptv/iptv](https://github.com/rebeliptv/iptv) | ★142, активен, но это self-hosted IPTV-сервер (прокси), не статичный список; лицензия proprietary | Не подходит под модель discovery (аналог kptv-fast) |

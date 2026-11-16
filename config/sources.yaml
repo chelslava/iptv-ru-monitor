@@ -105,6 +105,56 @@ sources:
     # репозитория нет — только review; репозиторий активен (обновления
     # еженедельно).
 
+  - id: substanc-ru
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/substanc1/iptv-russia/main/streams/ru.m3u"
+    # Проверено 2026-11-16: 686 записей, tvg-id у 99% (хорошее сопоставление
+    # EPG), group-title отсутствует — категории по имени канала. Хосты — общий
+    # пул бесплатных CDN (mcquack, uplink.kz, cinerama.uz, smotrim) + ~73
+    # секретных URL (fs.uplink.kz?token=...) отсекаются политикой; ~2.6%
+    # записей — зеркала платных каналов (365 дней, Amedia Hit, Dom Kino
+    # Premium) — плотность сопоставима с уже включёнными источниками, каждый
+    # поток публикуется только через approval. Лицензия Unlicense. Репозиторий
+    # активен (обновление 2026-11-15). Даёт ~200 новых URL (~29% списка).
+
+  - id: tvrus-ru
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/tv-rus/tv-rus.github.io/main/docs/playlists/all.m3u"
+    # Проверено 2026-11-16: 304 записи, 100% с tvg-id и group-title
+    # (федеральные/региональные/кино/новости...), 2 секретных URL. Хосты —
+    # mcquack, smotrim, ntv.ru, 31.148.x — без операторов платных сервисов.
+    # LICENSE у репозитория нет — только review; разливается через GitHub
+    # Pages (tv-rus.github.io), raw-ссылка стабильна. Репозиторий активен
+    # (2026-11-14), молодой (создан 2026-11-10). Список на ~91% дублирует
+    # каталог (порядок ротации ставит его последним): после discover
+    # 2026-11-16 закреплён 1 поток, остальные URL принадлежат более ранним
+    # источникам; ценность — курируемые tvg-id/group-title и независимое
+    # обновление (забирает URL, если ранние источники их потеряют).
+
+  - id: dvinov-spb
+    adapter: remote_m3u
+    enabled: true
+    country: RU
+    public_policy: review
+    refresh_hours: 24
+    url: "https://raw.githubusercontent.com/dvinokurov80/iptv-russia-spb/main/playlist.m3u"
+    # Проверено 2026-11-16: 215 записей (общероссийские + петербургские и
+    # региональные: Тува, vod.tuva.ru, terra), group-title 100%, tvg-id 72%,
+    # ~13 секретных URL отсекаются политикой. Хосты — mcquack, catcast,
+    # uplink.kz, 88.212.15.50 — без операторов платных сервисов. LICENSE
+    # отсутствует — только review. Репозиторий активен (обновление
+    # 2026-11-16). На ~98% дублирует каталог (последний в порядке ротации):
+    # после discover 2026-11-16 закреплено 4 потока; ценность — СПб/реги-
+    # ональная курируемость и независимое обновление.
+
   - id: custom-local
     adapter: custom_m3u
     enabled: true
